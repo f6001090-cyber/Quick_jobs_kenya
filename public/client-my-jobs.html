@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>My Jobs - Quick Jobs Kenya</title>
+
+<style>
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    font-family: Arial, sans-serif;
+    background: #f4f6f8;
+    color: #222;
+}
+
+header {
+    background: #111827;
+    color: white;
+    padding: 18px;
+    text-align: center;
+}
+
+header h1 {
+    margin: 0;
+    font-size: 22px;
+}
+
+.container {
+    width: 94%;
+    max-width: 900px;
+    margin: 20px auto;
+}
+
+.top-actions {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-bottom: 20px;
+}
+
+button,
+.action-link {
+    border: none;
+    padding: 11px 15px;
+    border-radius: 8px;
+    cursor: pointer;
+    text-decoration: none;
+    font-size: 14px;
+}
+
+.primary {
+    background: #2563eb;
+    color: white;
+}
+
+.secondary {
+    background: #374151;
+    color: white;
+}
+
+.danger {
+    background: #dc2626;
+    color: white;
+}
+
+.job-card {
+    background: white;
+    border-radius: 12px;
+    padding: 18px;
+    margin-bottom: 15px;
+    box-shadow: 0 3px 12px rgba(0,0,0,0.08);
+}
+
+.job-card h2 {
+    margin-top: 0;
+    margin-bottom: 8px;
+}
+
+.info {
+    margin: 7px 0;
+    color: #555;
+}
+
+.status {
+    display: inline-block;
+    padding: 6px 10px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: bold;
+    background: #e5e7eb;
+}
+
+.status.open {
+    background: #dcfce7;
+    color: #166534;
+}
+
+.status.assigned,
+.status.hired {
+    background: #dbeafe;
+    color: #1e40af;
+}
+
+.status.completed {
+    background: #fef3c7;
+    color: #92400e;
+}
+
+.empty {
+    background: white;
+    padding: 30px;
+    text-align: center;
+    border-radius: 12px;
+    color: #666;
+}
+
+.loading {
+    text-align: center;
+    padding: 30px;
+}
+
+.error {
+    background: #fee2e2;
+    color: #991b1b;
+    padding: 15px;
+    border-radius: 10px;
+    margin-bottom: 15px;
+}
+</style>
+</head>
+
+<body>
+
+<header>
+    <h1>📋 My Jobs</h1>
+</header>
+
+<div class="container">
+
+    <div class="top-actions">
+        <a href="/client.html" class="action-link secondary">
+            ← Client Dashboard
+        </a>
+
+        <a href="/post-job.html" class="action-link primary">
+            + Post New Job
+        </a>
+    </div>
+
+    <div id="message"></div>
+
+    <div id="jobs">
+        <div class="loading">
+            Loading your jobs...
+        </div>
+    </div>
+
+</div>
+
+<script>
+
+const token = localStorage.getItem("qjk_token");
+
+if (!token) {
+    window.location.href = "/login.html";
+}
+
+async function loadJobs() {
+
+    const container = document.getElementById("jobs");
+    const message = document.getElementById("message");
+
+    try {
+
+        const response = await fetch("/api/client/my-jobs", {
+            headers: {
+                "Authorization": "Bearer " + token
+            }
+        });
+
+        const data = await response.json();
+
+        if (!response.ok || !data.success) {
+
+            message.innerHTML = `
+                <div class="error">
+                    ${data.message || "Unable to load your jobs."}
+                </div>
+            `;
+
+            container.innerHTML = "";
+            return;
+        }
+
+        if (!data.jobs || data.jobs.length === 0) {
+
+            container.innerHTML = `
+                <div class="empty">
+                    <h3>No jobs posted yet</h3>
+                    <p>You have not posted any jobs.</p>
+
+                    <a href="/post-job.html"
+                       class="action-link primary">
+                        Post Your First Job
+                    </a>
+                </div>
+            `;
+
+            return;
+        }
+
+        container.innerHTML = "";
+
+        data.jobs.forEach(job => {
+
+            const card = document.createElement("div");
+            card.className = "job-card";
+
+            const statusClass =
+                String(job.status || "")
+                    .toLowerCase()
+                    .replace(/\s+/g, "-");
+
+            card.innerHTML = `
+
+                <h2>${escapeHTML(job.title)}</h2>
+
+                <p class="info">
+                    <strong>Category:</strong>
+                    ${escapeHTML(job.category || "Not specified")}
+                </p>
+
+                <p class="info">
+                    <strong>Budget:</strong>
+                    KSh ${Number(job.budget || 0).toLocaleString()}
+                </p>
+
+                <p class="info">
+                    <strong>Description:</strong><br>
+                    ${escapeHTML(job.description || "No description")}
+                </p>
+
+                <p class="info">
+                    <strong>Posted:</strong>
+                    ${escapeHTML(job.created_at || "")}
+                </p>
+
+                <p>
+                    <span class="status ${statusClass}">
+                        ${escapeHTML(job.status || "unknown")}
+                    </span>
+                </p>
+
+                ${
+                    job.hired_worker_id
+                    ? `
+                        <p class="info">
+                            <strong>Worker ID:</strong>
+                            ${job.hired_worker_id}
+                        </p>
+                    `
+                    : ""
+                }
+
+                <p>
+                    <a
+                        href="/applicants.html?job_id=${job.id}"
+                        class="action-link primary">
+                        👥 Manage Job
+                    </a>
+                </p>
+
+            `;
+
+            container.appendChild(card);
+        });
+
+    } catch (error) {
+
+        console.error(error);
+
+        message.innerHTML = `
+            <div class="error">
+                Unable to connect to the server.
+            </div>
+        `;
+
+        container.innerHTML = "";
+    }
+}
+
+
+function escapeHTML(value) {
+
+    return String(value)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+}
+
+
+loadJobs();
+
+</script>
+
+</body>
+</html>

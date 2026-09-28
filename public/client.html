@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Quick Jobs Kenya - Client Dashboard</title>
+
+<style>
+*{
+    box-sizing:border-box;
+}
+
+body{
+    margin:0;
+    font-family:Arial,sans-serif;
+    background:#f4f6f8;
+    color:#222;
+}
+
+header{
+    background:#111827;
+    color:white;
+    padding:18px;
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+}
+
+header h2{
+    margin:0;
+}
+
+.logout{
+    background:#dc2626;
+    color:white;
+    border:none;
+    padding:9px 14px;
+    border-radius:7px;
+    cursor:pointer;
+}
+
+.container{
+    max-width:900px;
+    margin:auto;
+    padding:20px;
+}
+
+.welcome{
+    background:white;
+    padding:20px;
+    border-radius:12px;
+    margin-bottom:20px;
+    box-shadow:0 2px 8px rgba(0,0,0,.08);
+}
+
+.actions{
+    display:grid;
+    grid-template-columns:repeat(auto-fit,minmax(150px,1fr));
+    gap:12px;
+    margin-bottom:25px;
+}
+
+.action{
+    background:white;
+    padding:18px;
+    border-radius:12px;
+    text-align:center;
+    cursor:pointer;
+    box-shadow:0 2px 8px rgba(0,0,0,.08);
+}
+
+.action:hover{
+    transform:translateY(-2px);
+}
+
+.action h3{
+    margin:8px 0 5px;
+}
+
+.jobs-section{
+    background:white;
+    padding:20px;
+    border-radius:12px;
+    box-shadow:0 2px 8px rgba(0,0,0,.08);
+}
+
+.job-card{
+    border:1px solid #ddd;
+    border-radius:10px;
+    padding:16px;
+    margin-top:14px;
+}
+
+.job-card h3{
+    margin-top:0;
+}
+
+.job-info{
+    color:#555;
+    margin:7px 0;
+}
+
+.status{
+    display:inline-block;
+    padding:5px 9px;
+    border-radius:6px;
+    background:#e5e7eb;
+    font-size:13px;
+    margin:8px 0;
+}
+
+button{
+    border:none;
+    border-radius:7px;
+    padding:10px 14px;
+    cursor:pointer;
+    margin:5px 5px 0 0;
+}
+
+.primary{
+    background:#2563eb;
+    color:white;
+}
+
+.secondary{
+    background:#059669;
+    color:white;
+}
+
+.empty{
+    text-align:center;
+    color:#666;
+    padding:25px;
+}
+
+.error{
+    color:#b91c1c;
+    background:#fee2e2;
+    padding:12px;
+    border-radius:8px;
+}
+
+.loading{
+    text-align:center;
+    padding:20px;
+}
+</style>
+</head>
+
+<body>
+
+<header>
+    <h2>QUICK JOBS KENYA</h2>
+    <button class="logout" onclick="logout()">Logout</button>
+</header>
+
+<div class="container">
+
+    <div class="welcome">
+        <h2 id="welcomeText">Welcome, Client 👋</h2>
+        <p>Post jobs, manage applicants and hire workers.</p>
+    </div>
+
+    <div class="actions">
+
+        <div class="action" onclick="window.location.href='/post-job.html'">
+            <div style="font-size:30px;">➕</div>
+            <h3>Post Job</h3>
+            <p>Create a new job</p>
+        </div>
+
+        <div class="action" onclick="loadMyJobs()">
+            <div style="font-size:30px;">📋</div>
+            <h3>My Jobs</h3>
+            <p>View your posted jobs</p>
+        </div>
+
+        <div class="action" onclick="window.location.href='/client-completed.html'">
+            <div style="font-size:30px;">✅</div>
+            <h3>Completed Jobs</h3>
+            <p>Confirm completed work</p>
+        </div>
+
+    </div>
+
+    <div class="jobs-section">
+        <h2>My Posted Jobs</h2>
+
+        <div id="jobs">
+            <div class="loading">Loading your jobs...</div>
+        </div>
+    </div>
+
+</div>
+
+<script>
+
+const token = localStorage.getItem("qjk_token");
+
+if(!token){
+    window.location.href="/login.html";
+}
+
+async function loadProfile(){
+
+    try{
+
+        const response = await fetch("/api/profile",{
+            headers:{
+                "Authorization":"Bearer " + token
+            }
+        });
+
+        const result = await response.json();
+
+        if(result.success && result.user){
+
+            if(result.user.role !== "client"){
+                window.location.href="/worker.html";
+                return;
+            }
+
+            document.getElementById("welcomeText").textContent =
+                "Welcome, " + result.user.full_name + " 👋";
+        }
+
+    }catch(error){
+        console.log("Profile loading skipped.");
+    }
+}
+
+async function loadMyJobs(){
+
+    const container = document.getElementById("jobs");
+
+    container.innerHTML =
+        '<div class="loading">Loading your jobs...</div>';
+
+    try{
+
+        const response = await fetch("/api/client-jobs",{
+            headers:{
+                "Authorization":"Bearer " + token
+            }
+        });
+
+        const result = await response.json();
+
+        if(!response.ok || !result.success){
+
+            container.innerHTML =
+                '<div class="error">' +
+                (result.message || "Unable to load jobs.") +
+                '</div>';
+
+            return;
+        }
+
+        if(!result.jobs || result.jobs.length === 0){
+
+            container.innerHTML = `
+                <div class="empty">
+                    <p>You have not posted any jobs yet.</p>
+                    <button class="primary"
+                        onclick="window.location.href='/post-job.html'">
+                        Post Your First Job
+                    </button>
+                </div>
+            `;
+
+            return;
+        }
+
+        container.innerHTML = result.jobs.map(job => `
+
+            <div class="job-card">
+
+                <h3>${escapeHtml(job.title)}</h3>
+
+                <div class="job-info">
+                    <strong>Budget:</strong>
+                    KSh ${Number(job.budget).toLocaleString()}
+                </div>
+
+                <div class="job-info">
+                    <strong>Category:</strong>
+                    ${escapeHtml(job.category || "General")}
+                </div>
+
+                <div class="job-info">
+                    <strong>Status:</strong>
+                    <span class="status">
+                        ${escapeHtml(job.status)}
+                    </span>
+                </div>
+
+                <div class="job-info">
+                    ${escapeHtml(job.description || "")}
+                </div>
+
+                <button class="primary"
+                    onclick="window.location.href='/applicants.html?job=${job.id}'">
+                    👥 View Applicants
+                </button>
+
+            </div>
+
+        `).join("");
+
+    }catch(error){
+
+        console.error(error);
+
+        container.innerHTML =
+            '<div class="error">Could not connect to the server.</div>';
+    }
+}
+
+function escapeHtml(value){
+
+    return String(value)
+        .replace(/&/g,"&amp;")
+        .replace(/</g,"&lt;")
+        .replace(/>/g,"&gt;")
+        .replace(/"/g,"&quot;")
+        .replace(/'/g,"&#039;");
+}
+
+function logout(){
+
+    localStorage.removeItem("qjk_token");
+    window.location.href="/login.html";
+}
+
+loadProfile();
+loadMyJobs();
+
+</script>
+
+
+<a href="/client-my-jobs.html"
+   style="display:inline-block;padding:12px 16px;background:#2563eb;color:white;text-decoration:none;border-radius:8px;margin:6px 0;">
+   📋 My Jobs
+</a>
+
+</body>
+</html>

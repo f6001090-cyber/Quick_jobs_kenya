@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Job Details - Quick Jobs Kenya</title>
+
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+
+body{
+font-family:Arial,Helvetica,sans-serif;
+background:#f5f7f6;
+color:#17202a;
+}
+
+header{
+background:#101820;
+color:white;
+padding:16px 20px;
+display:flex;
+justify-content:space-between;
+align-items:center;
+}
+
+.logo{
+font-size:20px;
+font-weight:800;
+}
+
+.logo span{
+color:#16a34a;
+}
+
+.back{
+color:#d5dde2;
+text-decoration:none;
+font-size:14px;
+}
+
+.container{
+max-width:750px;
+margin:auto;
+padding:25px 18px 50px;
+}
+
+.card{
+background:white;
+border:1px solid #e1e6e3;
+border-radius:14px;
+padding:25px;
+}
+
+.top{
+display:flex;
+justify-content:space-between;
+gap:20px;
+margin-bottom:15px;
+}
+
+.title{
+font-size:25px;
+}
+
+.budget{
+font-size:20px;
+font-weight:bold;
+color:#16a34a;
+white-space:nowrap;
+}
+
+.category{
+display:inline-block;
+background:#eaf8ef;
+color:#176b34;
+padding:6px 10px;
+border-radius:20px;
+font-size:12px;
+margin-bottom:18px;
+}
+
+.description{
+color:#4f5b64;
+line-height:1.7;
+font-size:15px;
+white-space:pre-wrap;
+margin-bottom:20px;
+}
+
+.info{
+border-top:1px solid #edf0ee;
+padding-top:18px;
+margin-top:18px;
+}
+
+.info-row{
+display:flex;
+justify-content:space-between;
+padding:9px 0;
+}
+
+.info-row span:first-child{
+color:#68737d;
+}
+
+.apply{
+width:100%;
+margin-top:22px;
+padding:14px;
+border:none;
+border-radius:8px;
+background:#16a34a;
+color:white;
+font-size:15px;
+font-weight:bold;
+cursor:pointer;
+}
+
+.apply:disabled{
+background:#9aa5ab;
+cursor:not-allowed;
+}
+
+.message{
+display:none;
+padding:13px;
+border-radius:8px;
+margin-bottom:16px;
+font-size:14px;
+}
+
+.error{
+background:#fdecec;
+color:#a61b1b;
+}
+
+.success{
+background:#eaf8ef;
+color:#176b34;
+}
+
+.loading{
+text-align:center;
+color:#68737d;
+padding:30px;
+}
+</style>
+</head>
+
+<body>
+
+<header>
+
+<div class="logo">
+QUICK <span>JOBS</span> KENYA
+</div>
+
+<a href="/jobs.html" class="back">
+← Find Jobs
+</a>
+
+</header>
+
+<div class="container">
+
+<div id="loading" class="loading">
+Loading job...
+</div>
+
+<div id="content" style="display:none">
+
+<div class="card">
+
+<div id="message" class="message"></div>
+
+<div class="top">
+
+<h1 id="title" class="title"></h1>
+
+<div id="budget" class="budget"></div>
+
+</div>
+
+<div id="category" class="category"></div>
+
+<div id="description" class="description"></div>
+
+<div class="info">
+
+<div class="info-row">
+
+<span>Client</span>
+
+<strong id="client"></strong>
+
+</div>
+
+<div class="info-row">
+
+<span>Status</span>
+
+<strong id="status"></strong>
+
+</div>
+
+</div>
+
+<button
+id="applyButton"
+class="apply"
+onclick="applyForJob()">
+
+Apply for this Job
+
+</button>
+
+</div>
+
+</div>
+
+</div>
+
+<script>
+
+const token=
+localStorage.getItem("qjk_token");
+
+if(!token){
+window.location.href="/login.html";
+}
+
+const params=
+new URLSearchParams(window.location.search);
+
+const jobId=
+params.get("id");
+
+if(!jobId){
+
+document.getElementById("loading").textContent=
+"Invalid job.";
+
+throw new Error("Missing job ID");
+
+}
+
+
+function escapeHtml(value){
+
+return String(value)
+.replace(/&/g,"&amp;")
+.replace(/</g,"&lt;")
+.replace(/>/g,"&gt;")
+.replace(/"/g,"&quot;")
+.replace(/'/g,"&#039;");
+
+}
+
+
+async function loadJob(){
+
+try{
+
+const response=
+await fetch("/api/jobs/"+jobId,{
+
+headers:{
+"Authorization":"Bearer "+token
+}
+
+});
+
+const result=
+await response.json();
+
+if(!result.success){
+
+document.getElementById("loading").textContent=
+result.message || "Job not found.";
+
+return;
+
+}
+
+const job=result.job;
+
+document.getElementById("title").textContent=
+job.title;
+
+document.getElementById("budget").textContent=
+"KSh "+Number(job.budget).toFixed(2);
+
+document.getElementById("description").textContent=
+job.description;
+
+document.getElementById("client").textContent=
+job.client_name;
+
+document.getElementById("status").textContent=
+job.status;
+
+if(job.category){
+
+document.getElementById("category").textContent=
+job.category;
+
+}else{
+
+document.getElementById("category").style.display=
+"none";
+
+}
+
+if(job.status!=="open"){
+
+const button=
+document.getElementById("applyButton");
+
+button.disabled=true;
+
+button.textContent=
+"Applications Closed";
+
+}
+
+document.getElementById("loading").style.display=
+"none";
+
+document.getElementById("content").style.display=
+"block";
+
+}catch(error){
+
+console.error(error);
+
+document.getElementById("loading").textContent=
+"Unable to connect to the server.";
+
+}
+
+}
+
+
+async function applyForJob(){
+
+const button=
+document.getElementById("applyButton");
+
+const message=
+document.getElementById("message");
+
+button.disabled=true;
+
+button.textContent=
+"Submitting application...";
+
+try{
+
+const response=
+await fetch("/api/applications",{
+
+method:"POST",
+
+headers:{
+"Content-Type":"application/json",
+"Authorization":"Bearer "+token
+},
+
+body:JSON.stringify({
+job_id:Number(jobId),
+message:"I am interested in completing this job."
+})
+
+});
+
+const result=
+await response.json();
+
+if(!result.success){
+
+message.textContent=
+result.message || "Application failed.";
+
+message.className=
+"message error";
+
+message.style.display=
+"block";
+
+button.disabled=false;
+
+button.textContent=
+"Apply for this Job";
+
+return;
+
+}
+
+message.textContent=
+"Application submitted successfully!";
+
+message.className=
+"message success";
+
+message.style.display=
+"block";
+
+button.textContent=
+"Application Submitted";
+
+}catch(error){
+
+console.error(error);
+
+message.textContent=
+"Could not connect to the server.";
+
+message.className=
+"message error";
+
+message.style.display=
+"block";
+
+button.disabled=false;
+
+button.textContent=
+"Apply for this Job";
+
+}
+
+}
+
+
+loadJob();
+
+</script>
+
+</body>
+</html>

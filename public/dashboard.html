@@ -1,0 +1,508 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>Dashboard - Quick Jobs Kenya</title>
+
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: Arial, Helvetica, sans-serif;
+            background: #f5f7f6;
+            color: #17202a;
+        }
+
+        header {
+            background: #101820;
+            color: white;
+            padding: 16px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .logo {
+            font-weight: 800;
+            font-size: 20px;
+        }
+
+        .logo span {
+            color: #16a34a;
+        }
+
+        .logout {
+            background: transparent;
+            border: 1px solid #53616c;
+            color: white;
+            padding: 8px 13px;
+            border-radius: 7px;
+            cursor: pointer;
+        }
+
+        .container {
+            max-width: 1050px;
+            margin: auto;
+            padding: 25px 18px;
+        }
+
+        .welcome {
+            margin-bottom: 22px;
+        }
+
+        .welcome h2 {
+            margin-bottom: 6px;
+        }
+
+        .welcome p {
+            color: #68737d;
+        }
+
+        .wallet {
+            background: #101820;
+            color: white;
+            border-radius: 15px;
+            padding: 25px;
+            margin-bottom: 25px;
+        }
+
+        .wallet small {
+            color: #aeb8bf;
+        }
+
+        .balance {
+            font-size: 34px;
+            font-weight: bold;
+            margin: 8px 0 18px;
+        }
+
+        .wallet-buttons {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .wallet-buttons button {
+            padding: 10px 16px;
+            border-radius: 7px;
+            cursor: pointer;
+            border: none;
+        }
+
+        .withdraw {
+            background: #16a34a;
+            color: white;
+        }
+
+        .history {
+            background: #27343e;
+            color: white;
+        }
+
+        .section-title {
+            margin: 30px 0 15px;
+        }
+
+        .menu {
+            display: grid;
+            grid-template-columns:
+                repeat(auto-fit, minmax(190px, 1fr));
+            gap: 15px;
+        }
+
+        .card {
+            background: white;
+            border: 1px solid #e1e6e3;
+            border-radius: 12px;
+            padding: 22px;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+
+        .card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 7px 20px rgba(0,0,0,0.06);
+        }
+
+        .icon {
+            font-size: 27px;
+            margin-bottom: 12px;
+        }
+
+        .card h3 {
+            margin-bottom: 7px;
+        }
+
+        .card p {
+            color: #68737d;
+            font-size: 14px;
+            line-height: 1.5;
+        }
+
+        .profile {
+            margin-top: 30px;
+            background: white;
+            border-radius: 12px;
+            padding: 22px;
+            border: 1px solid #e1e6e3;
+        }
+
+        .profile-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 12px 0;
+            border-bottom: 1px solid #edf0ee;
+        }
+
+        .profile-row:last-child {
+            border-bottom: none;
+        }
+
+        .profile-row span:first-child {
+            color: #68737d;
+        }
+
+        .status {
+            color: #16a34a;
+            font-weight: bold;
+        }
+
+        @media(max-width:600px) {
+
+            .balance {
+                font-size: 29px;
+            }
+
+            .profile-row {
+                gap: 20px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+<header>
+
+    <div class="logo">
+        QUICK <span>JOBS</span> KENYA
+    </div>
+
+    <button
+        class="logout"
+        onclick="logout()">
+        Logout
+    </button>
+
+</header>
+
+
+<div class="container">
+
+    <div class="welcome">
+
+        <h2 id="welcomeName">
+            Welcome
+        </h2>
+
+        <p>
+            Find jobs, complete tasks and grow your earnings.
+        </p>
+
+    </div>
+
+
+    <div class="wallet">
+
+        <small>Available Balance</small>
+
+        <div class="balance" id="balance">
+            KSh 0.00
+        </div>
+
+        <div class="wallet-buttons">
+
+            <button
+                class="withdraw"
+                onclick="alert('Withdrawal system coming next')">
+                Withdraw
+            </button>
+
+            <button
+                class="history"
+                onclick="loadWallet()">
+                Refresh Balance
+            </button>
+
+        </div>
+
+    </div>
+
+
+    <h3 class="section-title">
+        Quick Actions
+    </h3>
+
+
+    <div class="menu">
+
+        <div
+            class="card"
+            onclick="alert('Jobs page coming next')">
+
+            <div class="icon">🔎</div>
+
+            <h3>Find Jobs</h3>
+
+            <p>
+                Browse jobs posted by clients.
+            </p>
+
+        </div>
+
+
+        <div
+            class="card"
+            onclick="alert('Applications page coming next')">
+
+            <div class="icon">📋</div>
+
+            <h3>My Applications</h3>
+
+            <p>
+                Track jobs you have applied for.
+            </p>
+
+        </div>
+
+
+        <div
+            class="card"
+            onclick="alert('My Jobs page coming next')">
+
+            <div class="icon">💼</div>
+
+            <h3>My Jobs</h3>
+
+            <p>
+                View jobs you have been hired to complete.
+            </p>
+
+        </div>
+
+
+        <div
+            class="card"
+            onclick="alert('Transactions page coming next')">
+
+            <div class="icon">💰</div>
+
+            <h3>Earnings</h3>
+
+            <p>
+                View your earnings and transactions.
+            </p>
+
+        </div>
+
+    </div>
+
+
+    <div class="profile">
+
+        <h3>Your Account</h3>
+
+        <br>
+
+        <div class="profile-row">
+            <span>Name</span>
+            <strong id="profileName">-</strong>
+        </div>
+
+        <div class="profile-row">
+            <span>Phone</span>
+            <strong id="profilePhone">-</strong>
+        </div>
+
+        <div class="profile-row">
+            <span>Account Type</span>
+            <strong id="profileRole">-</strong>
+        </div>
+
+        <div class="profile-row">
+            <span>Status</span>
+            <strong
+                class="status"
+                id="profileStatus">
+                -
+            </strong>
+        </div>
+
+    </div>
+
+</div>
+
+
+<script>
+
+const token =
+    localStorage.getItem("qjk_token");
+
+
+if (!token) {
+
+    window.location.href =
+        "/login.html";
+
+}
+
+
+async function loadProfile() {
+
+    try {
+
+        const response = await fetch(
+            "/api/me",
+            {
+                headers: {
+                    "Authorization":
+                        "Bearer " + token
+                }
+            }
+        );
+
+
+        const result =
+            await response.json();
+
+
+        if (!result.success) {
+
+            logout();
+
+            return;
+
+        }
+
+
+        const user =
+            result.user;
+
+
+        document.getElementById(
+            "welcomeName"
+        ).textContent =
+            "Welcome, " + user.full_name;
+
+
+        document.getElementById(
+            "profileName"
+        ).textContent =
+            user.full_name;
+
+
+        document.getElementById(
+            "profilePhone"
+        ).textContent =
+            user.phone;
+
+
+        document.getElementById(
+            "profileRole"
+        ).textContent =
+            user.role === "worker"
+                ? "Worker"
+                : "Client";
+
+
+        document.getElementById(
+            "profileStatus"
+        ).textContent =
+            user.status;
+
+
+        document.getElementById(
+            "balance"
+        ).textContent =
+            "KSh " +
+            Number(user.wallet_balance)
+                .toFixed(2);
+
+
+    } catch (error) {
+
+        console.error(error);
+
+    }
+
+}
+
+
+async function loadWallet() {
+
+    try {
+
+        const response =
+            await fetch(
+                "/api/wallet",
+                {
+                    headers: {
+                        "Authorization":
+                            "Bearer " + token
+                    }
+                }
+            );
+
+
+        const result =
+            await response.json();
+
+
+        if (result.success) {
+
+            document.getElementById(
+                "balance"
+            ).textContent =
+                "KSh " +
+                Number(result.balance)
+                    .toFixed(2);
+
+        }
+
+    } catch (error) {
+
+        console.error(error);
+
+    }
+
+}
+
+
+function logout() {
+
+    localStorage.removeItem(
+        "qjk_token"
+    );
+
+    localStorage.removeItem(
+        "qjk_user"
+    );
+
+    window.location.href =
+        "/login.html";
+
+}
+
+
+loadProfile();
+
+</script>
+
+</body>
+</html>

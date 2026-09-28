@@ -1,0 +1,1110 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>Admin Panel - Quick Jobs Kenya</title>
+
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            font-family: Arial, sans-serif;
+            background: #f4f6f8;
+        }
+
+        header {
+            background: #111827;
+            color: white;
+            padding: 20px;
+            text-align: center;
+        }
+
+        header h1 {
+            margin: 0;
+        }
+
+        .container {
+            max-width: 1100px;
+            margin: auto;
+            padding: 20px;
+        }
+
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .stat {
+            background: white;
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+            text-align: center;
+        }
+
+        .stat-number {
+            font-size: 30px;
+            font-weight: bold;
+            margin-top: 8px;
+        }
+
+        .card {
+            background: white;
+            padding: 20px;
+            border-radius: 12px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        }
+
+        .withdrawal {
+            border-bottom: 1px solid #eee;
+            padding: 18px 0;
+        }
+
+        .withdrawal:last-child {
+            border-bottom: none;
+        }
+
+        .withdrawal h3 {
+            margin: 0 0 8px;
+        }
+
+        .withdrawal p {
+            margin: 6px 0;
+        }
+
+        .pending {
+            color: #b36b00;
+            font-weight: bold;
+        }
+
+        .completed {
+            color: #0b7a3b;
+            font-weight: bold;
+        }
+
+        .rejected {
+            color: #c62828;
+            font-weight: bold;
+        }
+
+        button {
+            border: none;
+            border-radius: 7px;
+            padding: 11px 16px;
+            margin: 6px 6px 0 0;
+            color: white;
+            font-size: 14px;
+            cursor: pointer;
+        }
+
+        .approve {
+            background: #0b7a3b;
+        }
+
+        .reject {
+            background: #c62828;
+        }
+
+        .refresh {
+            background: #2563eb;
+        }
+
+        button:disabled {
+            background: #999;
+            cursor: not-allowed;
+        }
+
+        .message {
+            padding: 12px;
+            margin-bottom: 15px;
+            border-radius: 7px;
+            display: none;
+        }
+
+        .empty {
+            text-align: center;
+            color: #666;
+            padding: 20px;
+        }
+
+        .back {
+            display: block;
+            text-align: center;
+            margin: 25px 0;
+            color: #2563eb;
+            text-decoration: none;
+            font-weight: bold;
+        }
+
+        @media (max-width: 600px) {
+            .container {
+                padding: 12px;
+            }
+
+            .card {
+                padding: 15px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+<header>
+    <h1>QUICK JOBS KENYA</h1>
+    <p>Admin Panel</p>
+</header>
+
+<div class="container">
+
+    <div id="message" class="message"></div>
+
+    <div class="stats">
+
+        <div class="stat">
+            <div>Total Users</div>
+            <div class="stat-number" id="totalUsers">0</div>
+        </div>
+
+        <div class="stat">
+            <div>Workers</div>
+            <div class="stat-number" id="totalWorkers">0</div>
+        </div>
+
+        <div class="stat">
+            <div>Clients</div>
+            <div class="stat-number" id="totalClients">0</div>
+        </div>
+
+        <div class="stat">
+            <div>Total Jobs</div>
+            <div class="stat-number" id="totalJobs">0</div>
+        </div>
+
+        <div class="stat">
+            <div>Open Jobs</div>
+            <div class="stat-number" id="openJobs">0</div>
+        </div>
+
+        <div class="stat">
+            <div>Completed Jobs</div>
+            <div class="stat-number" id="completedJobs">0</div>
+        </div>
+
+        <div class="stat">
+            <div>Total Wallet Balance</div>
+            <div class="stat-number" id="totalWallet">KSh 0</div>
+        </div>
+
+        <div class="stat">
+            <div>Pending Withdrawals</div>
+            <div class="stat-number" id="pendingAmount">KSh 0</div>
+        </div>
+
+        <div class="stat">
+            <div>Total Withdrawals</div>
+            <div class="stat-number" id="totalWithdrawals">0</div>
+        </div>
+
+        <div class="stat">
+            <div>Pending</div>
+            <div class="stat-number" id="pendingWithdrawals">0</div>
+        </div>
+
+        <div class="stat">
+            <div>Completed</div>
+            <div class="stat-number" id="completedWithdrawals">0</div>
+        </div>
+
+        <div class="stat">
+            <div>Rejected</div>
+            <div class="stat-number" id="rejectedWithdrawals">0</div>
+        </div>
+
+    </div>
+
+
+    <div class="card">
+
+        <h2>Withdrawal Management</h2>
+
+        <button
+            class="refresh"
+            onclick="loadWithdrawals()">
+            🔄 Refresh
+        </button>
+
+        <div id="withdrawals">
+            Loading withdrawals...
+        </div>
+
+    </div>
+
+
+
+    <div class="card">
+
+        <h2>User Management</h2>
+
+        <button
+            class="refresh"
+            onclick="loadUsers()">
+            🔄 Refresh Users
+        </button>
+
+        <div id="users">
+            Loading users...
+        </div>
+
+    </div>
+
+    <a class="back" href="/worker.html">
+        ← Back
+    </a>
+
+</div>
+
+
+<script>
+
+const token = localStorage.getItem("qjk_token");
+
+if (!token) {
+    window.location.href = "/login.html";
+}
+
+
+function escapeHtml(text) {
+
+    const div =
+        document.createElement("div");
+
+    div.textContent =
+        text == null ? "" : String(text);
+
+    return div.innerHTML;
+}
+
+
+function showMessage(text, success = true) {
+
+    const message =
+        document.getElementById("message");
+
+    message.textContent = text;
+
+    message.style.display = "block";
+
+    message.style.background =
+        success ? "#dff5e7" : "#fde2e2";
+
+    message.style.color =
+        success ? "#0b7a3b" : "#c62828";
+
+}
+
+
+async function loadWithdrawals() {
+
+    const container =
+        document.getElementById("withdrawals");
+
+    container.innerHTML =
+        "Loading withdrawals...";
+
+
+    try {
+
+        const response = await fetch(
+            "/api/admin/withdrawals",
+            {
+                headers: {
+                    "Authorization":
+                        "Bearer " + token
+                }
+            }
+        );
+
+
+        const data =
+            await response.json();
+
+
+        if (!response.ok) {
+
+            throw new Error(
+                data.message ||
+                "Unable to load withdrawals."
+            );
+        }
+
+
+        const withdrawals =
+            data.withdrawals || [];
+
+
+        updateStats(withdrawals);
+
+
+        if (withdrawals.length === 0) {
+
+            container.innerHTML = `
+                <div class="empty">
+                    No withdrawals found.
+                </div>
+            `;
+
+            return;
+        }
+
+
+        container.innerHTML =
+            withdrawals.map(
+                withdrawal => {
+
+                    const status =
+                        String(
+                            withdrawal.status || ""
+                        ).toLowerCase();
+
+
+                    let actions = "";
+
+
+                    if (status === "pending") {
+
+                        actions = `
+                            <button
+                                class="approve"
+                                onclick="approveWithdrawal(${withdrawal.id})">
+                                ✓ Approve
+                            </button>
+
+                            <button
+                                class="reject"
+                                onclick="rejectWithdrawal(${withdrawal.id})">
+                                ✕ Reject
+                            </button>
+                        `;
+                    }
+
+
+                    return `
+                        <div class="withdrawal">
+
+                            <h3>
+                                KSh ${Number(
+                                    withdrawal.amount || 0
+                                ).toLocaleString()}
+                            </h3>
+
+                            <p>
+                                <strong>Worker:</strong>
+                                ${escapeHtml(
+                                    withdrawal.full_name || "Unknown"
+                                )}
+                            </p>
+
+                            <p>
+                                <strong>Worker phone:</strong>
+                                ${escapeHtml(
+                                    withdrawal.user_phone || ""
+                                )}
+                            </p>
+
+                            <p>
+                                <strong>M-Pesa:</strong>
+                                ${escapeHtml(
+                                    withdrawal.mpesa_phone || ""
+                                )}
+                            </p>
+
+                            <p>
+                                <strong>Status:</strong>
+
+                                <span class="${escapeHtml(status)}">
+                                    ${escapeHtml(
+                                        withdrawal.status || ""
+                                    )}
+                                </span>
+                            </p>
+
+                            <p>
+                                <strong>Requested:</strong>
+                                ${escapeHtml(
+                                    withdrawal.created_at || ""
+                                )}
+                            </p>
+
+                            ${
+                                withdrawal.processed_at
+                                ? `
+                                <p>
+                                    <strong>Processed:</strong>
+                                    ${escapeHtml(
+                                        withdrawal.processed_at
+                                    )}
+                                </p>
+                                `
+                                : ""
+                            }
+
+                            <div>
+                                ${actions}
+                            </div>
+
+                        </div>
+                    `;
+
+                }
+            ).join("");
+
+
+    } catch (error) {
+
+        container.innerHTML = `
+            <div class="empty">
+                ${escapeHtml(error.message)}
+            </div>
+        `;
+
+    }
+}
+
+
+function updateStats(withdrawals) {
+
+    document.getElementById(
+        "totalWithdrawals"
+    ).textContent =
+        withdrawals.length;
+
+
+    document.getElementById(
+        "pendingWithdrawals"
+    ).textContent =
+        withdrawals.filter(
+            w => w.status === "pending"
+        ).length;
+
+
+    document.getElementById(
+        "completedWithdrawals"
+    ).textContent =
+        withdrawals.filter(
+            w => w.status === "completed"
+        ).length;
+
+
+    document.getElementById(
+        "rejectedWithdrawals"
+    ).textContent =
+        withdrawals.filter(
+            w => w.status === "rejected"
+        ).length;
+}
+
+
+async function approveWithdrawal(id) {
+
+    const confirmed =
+        confirm(
+            "Approve this withdrawal?"
+        );
+
+
+    if (!confirmed) {
+        return;
+    }
+
+
+    try {
+
+        const response =
+            await fetch(
+                "/api/admin/withdrawals/" +
+                id +
+                "/approve",
+                {
+                    method: "POST",
+
+                    headers: {
+                        "Authorization":
+                            "Bearer " + token
+                    }
+                }
+            );
+
+
+        const data =
+            await response.json();
+
+
+        if (!response.ok) {
+
+            throw new Error(
+                data.message ||
+                "Approval failed."
+            );
+        }
+
+
+        showMessage(
+            data.message ||
+            "Withdrawal approved."
+        );
+
+
+        await loadWithdrawals();
+
+
+    } catch (error) {
+
+        showMessage(
+            error.message,
+            false
+        );
+
+    }
+}
+
+
+async function rejectWithdrawal(id) {
+
+    const confirmed =
+        confirm(
+            "Reject this withdrawal and refund the worker?"
+        );
+
+
+    if (!confirmed) {
+        return;
+    }
+
+
+    try {
+
+        const response =
+            await fetch(
+                "/api/admin/withdrawals/" +
+                id +
+                "/reject",
+                {
+                    method: "POST",
+
+                    headers: {
+                        "Authorization":
+                            "Bearer " + token
+                    }
+                }
+            );
+
+
+        const data =
+            await response.json();
+
+
+        if (!response.ok) {
+
+            throw new Error(
+                data.message ||
+                "Rejection failed."
+            );
+        }
+
+
+        showMessage(
+            data.message ||
+            "Withdrawal rejected and refunded."
+        );
+
+
+        await loadWithdrawals();
+
+
+    } catch (error) {
+
+        showMessage(
+            error.message,
+            false
+        );
+
+    }
+}
+
+
+
+async function loadUsers() {
+
+    const container =
+        document.getElementById("users");
+
+    container.innerHTML =
+        "Loading users...";
+
+    try {
+
+        const response =
+            await fetch(
+                "/api/admin/users",
+                {
+                    headers: {
+                        "Authorization":
+                            "Bearer " + token
+                    }
+                }
+            );
+
+        const data =
+            await response.json();
+
+        if (!response.ok) {
+            throw new Error(
+                data.message ||
+                "Unable to load users."
+            );
+        }
+
+        const users =
+            data.users || [];
+
+        if (users.length === 0) {
+
+            container.innerHTML = `
+                <div class="empty">
+                    No users found.
+                </div>
+            `;
+
+            return;
+        }
+
+        container.innerHTML =
+            users.map(user => {
+
+                const status =
+                    String(
+                        user.status || ""
+                    ).toLowerCase();
+
+                const role =
+                    String(
+                        user.role || ""
+                    ).toLowerCase();
+
+                let actions = "";
+
+                if (Number(user.id) !==
+                    Number(getCurrentUserId())) {
+
+                    if (status === "active") {
+
+                        actions += `
+                            <button
+                                class="reject"
+                                onclick="suspendUser(${user.id})">
+                                Suspend
+                            </button>
+                        `;
+
+                    } else if (status === "suspended") {
+
+                        actions += `
+                            <button
+                                class="approve"
+                                onclick="activateUser(${user.id})">
+                                Activate
+                            </button>
+                        `;
+
+                    }
+
+                    actions += `
+                        <button
+                            class="reject"
+                            onclick="deleteUser(${user.id})">
+                            Delete
+                        </button>
+                    `;
+                }
+
+                return `
+                    <div class="withdrawal">
+
+                        <h3>
+                            ${escapeHtml(
+                                user.full_name || "Unknown"
+                            )}
+                        </h3>
+
+                        <p>
+                            <strong>ID:</strong>
+                            ${escapeHtml(user.id)}
+                        </p>
+
+                        <p>
+                            <strong>Phone:</strong>
+                            ${escapeHtml(user.phone || "")}
+                        </p>
+
+                        <p>
+                            <strong>Email:</strong>
+                            ${escapeHtml(user.email || "None")}
+                        </p>
+
+                        <p>
+                            <strong>Role:</strong>
+                            ${escapeHtml(role)}
+                        </p>
+
+                        <p>
+                            <strong>Wallet:</strong>
+                            KSh ${Number(
+                                user.wallet_balance || 0
+                            ).toLocaleString()}
+                        </p>
+
+                        <p>
+                            <strong>Status:</strong>
+
+                            <span class="${escapeHtml(status)}">
+                                ${escapeHtml(
+                                    user.status || ""
+                                )}
+                            </span>
+                        </p>
+
+                        <p>
+                            <strong>Joined:</strong>
+                            ${escapeHtml(
+                                user.created_at || ""
+                            )}
+                        </p>
+
+                        <div>
+                            ${actions}
+                        </div>
+
+                    </div>
+                `;
+
+            }).join("");
+
+    } catch (error) {
+
+        container.innerHTML = `
+            <div class="empty">
+                ${escapeHtml(error.message)}
+            </div>
+        `;
+    }
+}
+
+
+function getCurrentUserId() {
+
+    try {
+
+        const payload =
+            token.split(".")[1];
+
+        const decoded =
+            JSON.parse(
+                atob(
+                    payload
+                    .replace(/-/g, "+")
+                    .replace(/_/g, "/")
+                )
+            );
+
+        return decoded.id;
+
+    } catch (error) {
+
+        return null;
+    }
+}
+
+
+async function suspendUser(id) {
+
+    if (!confirm(
+        "Suspend this user?"
+    )) {
+        return;
+    }
+
+    try {
+
+        const response =
+            await fetch(
+                "/api/admin/users/" +
+                id +
+                "/suspend",
+                {
+                    method: "POST",
+                    headers: {
+                        "Authorization":
+                            "Bearer " + token
+                    }
+                }
+            );
+
+        const data =
+            await response.json();
+
+        if (!response.ok) {
+            throw new Error(
+                data.message ||
+                "Unable to suspend user."
+            );
+        }
+
+        showMessage(
+            data.message ||
+            "User suspended."
+        );
+
+        await loadUsers();
+
+    } catch (error) {
+
+        showMessage(
+            error.message,
+            false
+        );
+    }
+}
+
+
+async function activateUser(id) {
+
+    if (!confirm(
+        "Activate this user?"
+    )) {
+        return;
+    }
+
+    try {
+
+        const response =
+            await fetch(
+                "/api/admin/users/" +
+                id +
+                "/activate",
+                {
+                    method: "POST",
+                    headers: {
+                        "Authorization":
+                            "Bearer " + token
+                    }
+                }
+            );
+
+        const data =
+            await response.json();
+
+        if (!response.ok) {
+            throw new Error(
+                data.message ||
+                "Unable to activate user."
+            );
+        }
+
+        showMessage(
+            data.message ||
+            "User activated."
+        );
+
+        await loadUsers();
+
+    } catch (error) {
+
+        showMessage(
+            error.message,
+            false
+        );
+    }
+}
+
+
+async function deleteUser(id) {
+
+    if (!confirm(
+        "WARNING: Delete this user permanently?"
+    )) {
+        return;
+    }
+
+    try {
+
+        const response =
+            await fetch(
+                "/api/admin/users/" + id,
+                {
+                    method: "DELETE",
+                    headers: {
+                        "Authorization":
+                            "Bearer " + token
+                    }
+                }
+            );
+
+        const data =
+            await response.json();
+
+        if (!response.ok) {
+            throw new Error(
+                data.message ||
+                "Unable to delete user."
+            );
+        }
+
+        showMessage(
+            data.message ||
+            "User deleted."
+        );
+
+        await loadUsers();
+
+    } catch (error) {
+
+        showMessage(
+            error.message,
+            false
+        );
+    }
+}
+
+
+loadUsers();
+
+
+
+async function loadStats() {
+
+    try {
+
+        const response =
+            await fetch(
+                "/api/admin/stats",
+                {
+                    headers: {
+                        "Authorization":
+                            "Bearer " + token
+                    }
+                }
+            );
+
+        const data =
+            await response.json();
+
+        if (!response.ok) {
+            throw new Error(
+                data.message ||
+                "Unable to load statistics."
+            );
+        }
+
+        const users =
+            data.users || {};
+
+        const jobs =
+            data.jobs || {};
+
+        const wallet =
+            data.wallet || {};
+
+        const withdrawals =
+            data.withdrawals || {};
+
+
+        document.getElementById(
+            "totalUsers"
+        ).textContent =
+            Number(users.total || 0).toLocaleString();
+
+
+        document.getElementById(
+            "totalWorkers"
+        ).textContent =
+            Number(users.workers || 0).toLocaleString();
+
+
+        document.getElementById(
+            "totalClients"
+        ).textContent =
+            Number(users.clients || 0).toLocaleString();
+
+
+        document.getElementById(
+            "totalJobs"
+        ).textContent =
+            Number(jobs.total || 0).toLocaleString();
+
+
+        document.getElementById(
+            "openJobs"
+        ).textContent =
+            Number(jobs.open || 0).toLocaleString();
+
+
+        document.getElementById(
+            "completedJobs"
+        ).textContent =
+            Number(jobs.completed || 0).toLocaleString();
+
+
+        document.getElementById(
+            "totalWallet"
+        ).textContent =
+            "KSh " +
+            Number(
+                wallet.total_balance || 0
+            ).toLocaleString();
+
+
+        document.getElementById(
+            "pendingAmount"
+        ).textContent =
+            "KSh " +
+            Number(
+                withdrawals.pending_amount || 0
+            ).toLocaleString();
+
+
+        document.getElementById(
+            "totalWithdrawals"
+        ).textContent =
+            Number(
+                withdrawals.total || 0
+            ).toLocaleString();
+
+
+    } catch (error) {
+
+        showMessage(
+            error.message,
+            false
+        );
+    }
+}
+
+
+loadStats();
+
+
+loadWithdrawals();
+
+</script>
+
+</body>
+</html>

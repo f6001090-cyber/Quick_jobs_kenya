@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Jobs - Quick Jobs Kenya</title>
+
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #f4f6f8;
+            margin: 0;
+            padding: 20px;
+        }
+
+        h1 {
+            text-align: center;
+        }
+
+        #jobs {
+            max-width: 600px;
+            margin: auto;
+        }
+
+        .job {
+            background: white;
+            padding: 18px;
+            margin: 15px 0;
+            border-radius: 10px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        }
+
+        .status {
+            font-weight: bold;
+        }
+
+        button {
+            width: 100%;
+            padding: 13px;
+            margin-top: 12px;
+            border: none;
+            border-radius: 7px;
+            background: #0b7a3b;
+            color: white;
+            font-size: 16px;
+        }
+
+        button:disabled {
+            background: #999;
+        }
+
+        .waiting {
+            color: #b36b00;
+        }
+
+        .paid {
+            color: #0b7a3b;
+        }
+
+        .empty {
+            text-align: center;
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+        }
+    </style>
+</head>
+
+<body>
+
+<h1>My Jobs</h1>
+
+<div id="jobs">
+    Loading your jobs...
+</div>
+
+<script>
+
+const token = localStorage.getItem("qjk_token");
+
+document.getElementById("jobs").innerHTML =
+    token
+        ? "<div class='empty'><h3>Token found</h3><p>Loading assigned jobs...</p></div>"
+        : "<div class='empty'><h3>No token found</h3><p>Please login again.</p></div>";
+
+if (!token) {
+    alert("Please login first.");
+    window.location.href = "/login.html";
+}
+
+async function loadMyJobs() {
+
+    try {
+
+        const response = await fetch("/api/my-jobs", {
+            headers: {
+                "Authorization": "Bearer " + token
+            }
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+            throw new Error(data.message || "Failed to load jobs.");
+        }
+
+        const jobs = data.jobs || [];
+
+        if (jobs.length === 0) {
+
+            document.getElementById("jobs").innerHTML = `
+                <div class="empty">
+                    <h3>No assigned jobs yet</h3>
+                    <p>When a client hires you, the job will appear here.</p>
+                </div>
+            `;
+
+            return;
+        }
+
+        document.getElementById("jobs").innerHTML = jobs.map(job => {
+
+            let action = "";
+
+            if (job.status === "assigned") {
+
+                action = `
+                    <button onclick="completeJob(${job.id})">
+                        Mark Job as Complete
+                    </button>
+                `;
+
+            } else if (job.status === "completed") {
+
+                action = `
+                    <p class="waiting">
+                        ⏳ Waiting for the client to confirm and pay.
+                    </p>
+                `;
+
+            } else if (job.status === "paid") {
+
+                action = `
+                    <p class="paid">
+                        ✅ Job completed and payment confirmed.
+                    </p>
+                `;
+
+            }
+
+            return `
+                <div class="job">
+
+                    <h2>${escapeHtml(job.title)}</h2>
+
+                    <p>
+                        ${escapeHtml(job.description || "")}
+                    </p>
+
+                    <p>
+                        <strong>Category:</strong>
+                        ${escapeHtml(job.category || "General")}
+                    </p>
+
+                    <p>
+                        <strong>Budget:</strong>
+                        KSh ${Number(job.budget).toLocaleString()}
+                    </p>
+
+                    <p>
+                        <strong>Status:</strong>
+                        <span class="status">${escapeHtml(job.status)}</span>
+                    </p>
+
+                    ${action}
+
+                </div>
+            `;
+
+        }).join("");
+
+    } catch (error) {
+
+        document.getElementById("jobs").innerHTML = `
+            <div class="empty">
+                <h3>Unable to load jobs</h3>
+                <p>${escapeHtml(error.message)}</p>
+            </div>
+        `;
+
+    }
+}
+
+
+async function completeJob(jobId) {
+
+    const confirmed = confirm(
+        "Are you sure you have completed this job?"
+    );
+
+    if (!confirmed) {
+        return;
+    }
+
+    try {
+
+        const response = await fetch(
+            "/api/jobs/" + jobId + "/complete",
+            {
+                method: "POST",
+
+                headers: {
+                    "Authorization": "Bearer " + token
+                }
+            }
+        );
+
+        const data = await response.json();
+
+        if (!response.ok) {
+
+            alert(data.message || "Could not complete the job.");
+
+            return;
+        }
+
+        alert(
+            data.message ||
+            "Job marked as completed."
+        );
+
+        loadMyJobs();
+
+    } catch (error) {
+
+        alert("Connection error. Please try again.");
+
+    }
+}
+
+
+function escapeHtml(text) {
+
+    const div = document.createElement("div");
+
+    div.textContent = text;
+
+    return div.innerHTML;
+}
+
+
+loadMyJobs();
+
+</script>
+
+</body>
+</html>

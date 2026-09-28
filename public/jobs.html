@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Find Jobs - Quick Jobs Kenya</title>
+
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: Arial, Helvetica, sans-serif;
+            background: #f5f7f6;
+            color: #17202a;
+        }
+
+        header {
+            background: #101820;
+            color: white;
+            padding: 16px 20px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .logo {
+            font-size: 20px;
+            font-weight: 800;
+        }
+
+        .logo span {
+            color: #16a34a;
+        }
+
+        .back {
+            color: #d5dde2;
+            text-decoration: none;
+            font-size: 14px;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: auto;
+            padding: 25px 18px 50px;
+        }
+
+        .heading {
+            margin-bottom: 22px;
+        }
+
+        .heading h1 {
+            font-size: 27px;
+            margin-bottom: 7px;
+        }
+
+        .heading p {
+            color: #68737d;
+        }
+
+        .search {
+            background: white;
+            padding: 15px;
+            border-radius: 12px;
+            border: 1px solid #e1e6e3;
+            margin-bottom: 20px;
+        }
+
+        .search input {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #d8dedb;
+            border-radius: 8px;
+            font-size: 15px;
+            outline: none;
+        }
+
+        .search input:focus {
+            border-color: #16a34a;
+        }
+
+        #message {
+            display: none;
+            padding: 13px;
+            background: #fff4db;
+            color: #785700;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            font-size: 14px;
+        }
+
+        .jobs {
+            display: grid;
+            gap: 15px;
+        }
+
+        .job {
+            background: white;
+            border: 1px solid #e1e6e3;
+            border-radius: 13px;
+            padding: 21px;
+        }
+
+        .job-top {
+            display: flex;
+            justify-content: space-between;
+            gap: 15px;
+            margin-bottom: 10px;
+        }
+
+        .job h2 {
+            font-size: 19px;
+        }
+
+        .budget {
+            color: #16a34a;
+            font-weight: bold;
+            white-space: nowrap;
+        }
+
+        .category {
+            display: inline-block;
+            background: #eaf8ef;
+            color: #176b34;
+            padding: 5px 9px;
+            border-radius: 20px;
+            font-size: 12px;
+            margin-bottom: 12px;
+        }
+
+        .description {
+            color: #68737d;
+            line-height: 1.6;
+            font-size: 14px;
+            margin-bottom: 15px;
+        }
+
+        .client {
+            color: #68737d;
+            font-size: 13px;
+            margin-bottom: 15px;
+        }
+
+        .view-btn {
+            background: #16a34a;
+            color: white;
+            border: none;
+            border-radius: 7px;
+            padding: 11px 17px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+
+        .empty {
+            text-align: center;
+            background: white;
+            padding: 45px 20px;
+            border-radius: 13px;
+            border: 1px solid #e1e6e3;
+        }
+
+        .empty .icon {
+            font-size: 42px;
+            margin-bottom: 12px;
+        }
+
+        .empty p {
+            color: #68737d;
+            margin-top: 7px;
+        }
+
+        @media(max-width:600px) {
+
+            .job-top {
+                align-items: flex-start;
+            }
+
+            .job h2 {
+                font-size: 17px;
+            }
+
+            .budget {
+                font-size: 14px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+<header>
+
+    <div class="logo">
+        QUICK <span>JOBS</span> KENYA
+    </div>
+
+    <a class="back" href="/dashboard.html">
+        ← Dashboard
+    </a>
+
+</header>
+
+
+<div class="container">
+
+    <div class="heading">
+
+        <h1>Find Jobs</h1>
+
+        <p>
+            Discover opportunities posted by clients.
+        </p>
+
+    </div>
+
+
+    <div class="search">
+
+        <input
+            type="search"
+            id="search"
+            placeholder="Search jobs by title or category..."
+            oninput="filterJobs()"
+        >
+
+    </div>
+
+
+    <div id="message"></div>
+
+
+    <div id="jobs" class="jobs"></div>
+
+</div>
+
+
+<script>
+
+const token =
+    localStorage.getItem("qjk_token");
+
+let allJobs = [];
+
+
+if (!token) {
+
+    window.location.href =
+        "/login.html";
+
+}
+
+
+// Load jobs
+async function loadJobs() {
+
+    const container =
+        document.getElementById("jobs");
+
+    container.innerHTML =
+        "<p>Loading available jobs...</p>";
+
+
+    try {
+
+        const response =
+            await fetch("/api/jobs", {
+
+                headers: {
+                    "Authorization":
+                        "Bearer " + token
+                }
+
+            });
+
+
+        const result =
+            await response.json();
+
+
+        if (!result.success) {
+
+            container.innerHTML =
+                "<p>Unable to load jobs.</p>";
+
+            return;
+        }
+
+
+        allJobs = result.jobs;
+
+        displayJobs(allJobs);
+
+
+    } catch (error) {
+
+        console.error(error);
+
+        container.innerHTML =
+            "<p>Could not connect to the server.</p>";
+
+    }
+
+}
+
+
+// Display jobs
+function displayJobs(jobs) {
+
+    const container =
+        document.getElementById("jobs");
+
+
+    if (jobs.length === 0) {
+
+        container.innerHTML = `
+
+            <div class="empty">
+
+                <div class="icon">🔎</div>
+
+                <h2>No jobs available yet</h2>
+
+                <p>
+                    New opportunities will appear here
+                    when clients post them.
+                </p>
+
+            </div>
+
+        `;
+
+        return;
+    }
+
+
+    container.innerHTML =
+        jobs.map(job => `
+
+            <div class="job">
+
+                <div class="job-top">
+
+                    <h2>
+                        ${escapeHtml(job.title)}
+                    </h2>
+
+                    <div class="budget">
+                        KSh ${Number(job.budget).toFixed(2)}
+                    </div>
+
+                </div>
+
+
+                ${
+                    job.category
+                    ? `
+                        <span class="category">
+                            ${escapeHtml(job.category)}
+                        </span>
+                    `
+                    : ""
+                }
+
+
+                <p class="description">
+                    ${escapeHtml(job.description)}
+                </p>
+
+
+                <div class="client">
+                    Posted by:
+                    <strong>
+                        ${escapeHtml(job.client_name)}
+                    </strong>
+                </div>
+
+
+                <button
+                    class="view-btn"
+                    onclick="viewJob(${job.id})">
+                    View Job
+                </button>
+
+            </div>
+
+        `).join("");
+
+}
+
+
+// Search/filter
+function filterJobs() {
+
+    const query =
+        document.getElementById("search")
+            .value
+            .toLowerCase()
+            .trim();
+
+
+    if (!query) {
+
+        displayJobs(allJobs);
+
+        return;
+    }
+
+
+    const filtered =
+        allJobs.filter(job =>
+
+            job.title
+                .toLowerCase()
+                .includes(query)
+
+            ||
+
+            (job.category || "")
+                .toLowerCase()
+                .includes(query)
+
+            ||
+
+            job.description
+                .toLowerCase()
+                .includes(query)
+
+        );
+
+
+    displayJobs(filtered);
+
+}
+
+
+// Job details
+function viewJob(id) {
+
+    window.location.href =
+        "/job.html?id=" + id;
+
+}
+
+
+// Basic HTML escaping
+function escapeHtml(value) {
+
+    return String(value)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+}
+
+
+loadJobs();
+
+</script>
+
+</body>
+</html>

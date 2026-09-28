@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>Worker Dashboard - Quick Jobs Kenya</title>
+
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            font-family: Arial, sans-serif;
+            background: #f4f6f8;
+            color: #222;
+        }
+
+        header {
+            background: #0b7a3b;
+            color: white;
+            padding: 20px;
+            text-align: center;
+        }
+
+        header h1 {
+            margin: 0;
+            font-size: 25px;
+        }
+
+        header p {
+            margin: 8px 0 0;
+        }
+
+        .container {
+            max-width: 650px;
+            margin: auto;
+            padding: 20px;
+        }
+
+        .welcome {
+            background: white;
+            padding: 20px;
+            border-radius: 12px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        }
+
+        .welcome h2 {
+            margin-top: 0;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+        }
+
+        .card {
+            background: white;
+            padding: 22px 15px;
+            border-radius: 12px;
+            text-align: center;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+            text-decoration: none;
+            color: #222;
+        }
+
+        .icon {
+            font-size: 32px;
+            margin-bottom: 10px;
+        }
+
+        .card h3 {
+            margin: 5px 0;
+        }
+
+        .card p {
+            margin: 5px 0;
+            font-size: 13px;
+            color: #666;
+        }
+
+        .logout {
+            width: 100%;
+            padding: 14px;
+            margin-top: 25px;
+            border: none;
+            border-radius: 8px;
+            background: #c62828;
+            color: white;
+            font-size: 16px;
+        }
+
+        @media (max-width: 450px) {
+            .grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+<header>
+    <h1>QUICK JOBS KENYA</h1>
+    <p>Worker Dashboard</p>
+</header>
+
+<div class="container">
+
+    <div class="welcome">
+        <h2 id="welcome">Welcome 👋</h2>
+        <p>Find jobs, complete work and manage your earnings.</p>
+    </div>
+
+    <div class="grid">
+
+        <a class="card" href="/jobs.html">
+            <div class="icon">🔎</div>
+            <h3>Find Jobs</h3>
+            <p>Browse available jobs</p>
+        </a>
+
+        <a class="card" href="/my-jobs.html">
+            <div class="icon">📋</div>
+            <h3>My Jobs</h3>
+            <p>View your assigned jobs</p>
+        </a>
+
+        <a class="card" href="/wallet.html">
+            <div class="icon">💰</div>
+            <h3>Earnings</h3>
+            <p>View your earnings</p>
+        </a>
+
+        <a class="card" href="/withdraw.html">
+            <div class="icon">📲</div>
+            <h3>Withdraw</h3>
+            <p>Withdraw your money</p>
+        </a>
+
+    </div>
+
+    <button class="logout" onclick="logout()">
+        Logout
+    </button>
+
+</div>
+
+<script>
+
+const token = localStorage.getItem("qjk_token");
+
+if (!token) {
+    window.location.href = "/login.html";
+}
+
+async function loadUser() {
+
+    try {
+
+        const response = await fetch("/api/profile", {
+            headers: {
+                "Authorization": "Bearer " + token
+            }
+        });
+
+        if (!response.ok) {
+            return;
+        }
+
+        const data = await response.json();
+
+        if (data.user && data.user.full_name) {
+            document.getElementById("welcome").textContent =
+                "Welcome, " + data.user.full_name + " 👋";
+        }
+
+    } catch (error) {
+        console.log("Profile loading skipped.");
+    }
+}
+
+function logout() {
+
+    localStorage.removeItem("qjk_token");
+
+    window.location.href = "/login.html";
+}
+
+loadUser();
+
+</script>
+
+</body>
+</html>

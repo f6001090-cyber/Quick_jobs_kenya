@@ -1,0 +1,493 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>Withdraw - Quick Jobs Kenya</title>
+
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            font-family: Arial, sans-serif;
+            background: #f4f6f8;
+        }
+
+        header {
+            background: #0b7a3b;
+            color: white;
+            padding: 20px;
+            text-align: center;
+        }
+
+        header h1 {
+            margin: 0;
+        }
+
+        .container {
+            max-width: 600px;
+            margin: auto;
+            padding: 20px;
+        }
+
+        .card {
+            background: white;
+            padding: 22px;
+            border-radius: 12px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        }
+
+        .balance {
+            text-align: center;
+        }
+
+        .balance-amount {
+            font-size: 32px;
+            font-weight: bold;
+            color: #0b7a3b;
+        }
+
+        label {
+            display: block;
+            margin-top: 15px;
+            margin-bottom: 6px;
+            font-weight: bold;
+        }
+
+        input {
+            width: 100%;
+            padding: 13px;
+            border: 1px solid #ccc;
+            border-radius: 7px;
+            font-size: 16px;
+        }
+
+        button {
+            width: 100%;
+            padding: 14px;
+            margin-top: 20px;
+            border: none;
+            border-radius: 8px;
+            background: #0b7a3b;
+            color: white;
+            font-size: 16px;
+        }
+
+        button:disabled {
+            background: #999;
+        }
+
+        .message {
+            margin-top: 15px;
+            text-align: center;
+            font-weight: bold;
+        }
+
+        .withdrawal {
+            border-bottom: 1px solid #eee;
+            padding: 15px 0;
+        }
+
+        .withdrawal:last-child {
+            border-bottom: none;
+        }
+
+        .pending {
+            color: #b36b00;
+        }
+
+        .completed {
+            color: #0b7a3b;
+        }
+
+        .rejected {
+            color: #c62828;
+        }
+
+        .back {
+            display: block;
+            text-align: center;
+            margin: 20px 0;
+            color: #0b7a3b;
+            text-decoration: none;
+            font-weight: bold;
+        }
+
+        .empty {
+            text-align: center;
+            color: #666;
+        }
+    </style>
+</head>
+
+<body>
+
+<header>
+    <h1>Withdraw Money</h1>
+</header>
+
+<div class="container">
+
+    <div class="card balance">
+
+        <p>Available Balance</p>
+
+        <div class="balance-amount" id="balance">
+            KSh 0
+        </div>
+
+    </div>
+
+
+    <div class="card">
+
+        <h2>Request Withdrawal</h2>
+
+        <p>
+            Minimum withdrawal: <strong>KSh 200</strong>
+        </p>
+
+        <label for="phone">
+            M-Pesa Phone Number
+        </label>
+
+        <input
+            id="phone"
+            type="tel"
+            placeholder="07XXXXXXXX"
+            maxlength="10"
+        >
+
+        <label for="amount">
+            Amount
+        </label>
+
+        <input
+            id="amount"
+            type="number"
+            min="200"
+            placeholder="Enter amount"
+        >
+
+        <button id="withdrawButton" onclick="withdraw()">
+            Request Withdrawal
+        </button>
+
+        <div id="message" class="message"></div>
+
+    </div>
+
+
+    <div class="card">
+
+        <h2>Withdrawal History</h2>
+
+        <div id="withdrawals">
+            Loading...
+        </div>
+
+    </div>
+
+
+    <a class="back" href="/worker.html">
+        ← Back to Worker Dashboard
+    </a>
+
+</div>
+
+
+<script>
+
+const token = localStorage.getItem("qjk_token");
+
+if (!token) {
+    window.location.href = "/login.html";
+}
+
+
+async function loadWallet() {
+
+    try {
+
+        const response = await fetch("/api/wallet", {
+            headers: {
+                "Authorization": "Bearer " + token
+            }
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+            throw new Error(
+                data.message || "Unable to load balance."
+            );
+        }
+
+        document.getElementById("balance").textContent =
+            "KSh " +
+            Number(data.balance || 0).toLocaleString();
+
+    } catch (error) {
+
+        document.getElementById("balance").textContent =
+            "Unable to load";
+
+    }
+}
+
+
+async function withdraw() {
+
+    const phone =
+        document.getElementById("phone").value.trim();
+
+    const amount =
+        Number(document.getElementById("amount").value);
+
+    const button =
+        document.getElementById("withdrawButton");
+
+    const message =
+        document.getElementById("message");
+
+
+    message.textContent = "";
+
+
+    if (!/^07\d{8}$/.test(phone)) {
+
+        message.textContent =
+            "Enter a valid M-Pesa number.";
+
+        message.style.color = "#c62828";
+
+        return;
+    }
+
+
+    if (!Number.isFinite(amount) || amount < 200) {
+
+        message.textContent =
+            "Minimum withdrawal is KSh 200.";
+
+        message.style.color = "#c62828";
+
+        return;
+    }
+
+
+    const confirmed = confirm(
+        "Withdraw KSh " +
+        amount.toLocaleString() +
+        " to " +
+        phone +
+        "?"
+    );
+
+
+    if (!confirmed) {
+        return;
+    }
+
+
+    button.disabled = true;
+
+    button.textContent = "Processing...";
+
+
+    try {
+
+        const response = await fetch(
+            "/api/withdraw",
+            {
+                method: "POST",
+
+                headers: {
+                    "Content-Type": "application/json",
+                    "Authorization":
+                        "Bearer " + token
+                },
+
+                body: JSON.stringify({
+                    amount,
+                    phone
+                })
+            }
+        );
+
+
+        const data = await response.json();
+
+
+        if (!response.ok) {
+
+            throw new Error(
+                data.message ||
+                "Withdrawal failed."
+            );
+        }
+
+
+        message.textContent =
+            data.message ||
+            "Withdrawal request submitted.";
+
+        message.style.color = "#0b7a3b";
+
+
+        document.getElementById("amount").value = "";
+
+
+        await loadWallet();
+
+        await loadWithdrawals();
+
+
+    } catch (error) {
+
+        message.textContent =
+            error.message;
+
+        message.style.color = "#c62828";
+
+    }
+
+
+    button.disabled = false;
+
+    button.textContent =
+        "Request Withdrawal";
+}
+
+
+async function loadWithdrawals() {
+
+    try {
+
+        const response = await fetch(
+            "/api/my-withdrawals",
+            {
+                headers: {
+                    "Authorization":
+                        "Bearer " + token
+                }
+            }
+        );
+
+
+        const data = await response.json();
+
+
+        if (!response.ok) {
+
+            throw new Error(
+                data.message ||
+                "Unable to load withdrawals."
+            );
+        }
+
+
+        const withdrawals =
+            data.withdrawals || [];
+
+
+        if (withdrawals.length === 0) {
+
+            document.getElementById(
+                "withdrawals"
+            ).innerHTML = `
+                <div class="empty">
+                    No withdrawals yet.
+                </div>
+            `;
+
+            return;
+        }
+
+
+        document.getElementById(
+            "withdrawals"
+        ).innerHTML = withdrawals.map(
+            withdrawal => {
+
+                const status =
+                    String(
+                        withdrawal.status || ""
+                    ).toLowerCase();
+
+
+                return `
+                    <div class="withdrawal">
+
+                        <strong>
+                            KSh ${Number(
+                                withdrawal.amount || 0
+                            ).toLocaleString()}
+                        </strong>
+
+                        <p>
+                            M-Pesa:
+                            ${escapeHtml(
+                                withdrawal.phone || ""
+                            )}
+                        </p>
+
+                        <p class="${escapeHtml(status)}">
+                            Status:
+                            ${escapeHtml(
+                                withdrawal.status || ""
+                            )}
+                        </p>
+
+                        <small>
+                            ${escapeHtml(
+                                withdrawal.created_at || ""
+                            )}
+                        </small>
+
+                    </div>
+                `;
+
+            }
+        ).join("");
+
+
+    } catch (error) {
+
+        document.getElementById(
+            "withdrawals"
+        ).innerHTML = `
+            <div class="empty">
+                ${escapeHtml(error.message)}
+            </div>
+        `;
+
+    }
+}
+
+
+function escapeHtml(text) {
+
+    const div =
+        document.createElement("div");
+
+    div.textContent =
+        text == null ? "" : String(text);
+
+    return div.innerHTML;
+}
+
+
+loadWallet();
+
+loadWithdrawals();
+
+</script>
+
+</body>
+</html>

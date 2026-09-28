@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>Applicants - Quick Jobs Kenya</title>
+
+<style>
+*{
+box-sizing:border-box;
+margin:0;
+padding:0;
+}
+
+body{
+font-family:Arial,Helvetica,sans-serif;
+background:#f5f7f6;
+color:#17202a;
+}
+
+header{
+background:#101820;
+color:white;
+padding:16px 20px;
+display:flex;
+justify-content:space-between;
+align-items:center;
+}
+
+.logo{
+font-size:20px;
+font-weight:800;
+}
+
+.logo span{
+color:#16a34a;
+}
+
+.back{
+color:#d5dde2;
+text-decoration:none;
+font-size:14px;
+}
+
+.container{
+max-width:800px;
+margin:auto;
+padding:25px 18px 50px;
+}
+
+.heading{
+margin-bottom:22px;
+}
+
+.heading h1{
+font-size:26px;
+margin-bottom:7px;
+}
+
+.heading p{
+color:#68737d;
+}
+
+.card{
+background:white;
+border:1px solid #e1e6e3;
+border-radius:13px;
+padding:20px;
+margin-bottom:15px;
+}
+
+.worker-top{
+display:flex;
+justify-content:space-between;
+gap:15px;
+margin-bottom:12px;
+}
+
+.worker-name{
+font-size:18px;
+font-weight:bold;
+}
+
+.status{
+padding:5px 9px;
+border-radius:20px;
+background:#fff4db;
+color:#785700;
+font-size:12px;
+}
+
+.message{
+background:#f5f7f6;
+border-radius:8px;
+padding:13px;
+margin:12px 0;
+color:#4f5b64;
+line-height:1.5;
+font-size:14px;
+}
+
+.phone{
+color:#68737d;
+font-size:14px;
+margin-bottom:15px;
+}
+
+.actions{
+display:flex;
+gap:10px;
+}
+
+button{
+border:none;
+border-radius:7px;
+padding:10px 15px;
+font-weight:bold;
+cursor:pointer;
+}
+
+.hire{
+background:#16a34a;
+color:white;
+}
+
+.reject{
+background:#fdecec;
+color:#a61b1b;
+}
+
+.empty{
+background:white;
+border:1px solid #e1e6e3;
+border-radius:13px;
+padding:45px 20px;
+text-align:center;
+color:#68737d;
+}
+
+.loading{
+text-align:center;
+padding:30px;
+color:#68737d;
+}
+</style>
+</head>
+
+<body>
+
+<header>
+
+<div class="logo">
+QUICK <span>JOBS</span> KENYA
+</div>
+
+<a href="/client.html" class="back">
+← Dashboard
+</a>
+
+</header>
+
+
+<div class="container">
+
+<div class="heading">
+
+<h1>Applicants</h1>
+
+<p>
+Workers who have applied for your job.
+</p>
+
+</div>
+
+
+<div id="content">
+
+<div class="loading">
+Loading applicants...
+</div>
+
+</div>
+
+</div>
+
+
+<script>
+
+const token=
+localStorage.getItem("qjk_token");
+
+
+if(!token){
+window.location.href="/login.html";
+}
+
+
+const params=
+new URLSearchParams(window.location.search);
+
+const jobId=
+params.get("job");
+
+
+if(!jobId){
+
+document.getElementById("content").innerHTML=`
+
+<div class="empty">
+
+<h3>No job selected</h3>
+
+<p>
+Open applicants from one of your jobs.
+</p>
+
+</div>
+
+`;
+
+}else{
+
+loadApplicants();
+
+}
+
+
+async function loadApplicants(){
+
+const content=
+document.getElementById("content");
+
+
+try{
+
+const response=
+await fetch(
+"/api/job-applications/"+jobId,
+{
+headers:{
+"Authorization":
+"Bearer "+token
+}
+}
+);
+
+
+const result=
+await response.json();
+
+
+if(!result.success){
+
+content.innerHTML=`
+
+<div class="empty">
+
+<h3>Unable to load applicants</h3>
+
+<p>
+${escapeHtml(result.message || "Something went wrong.")}
+</p>
+
+</div>
+
+`;
+
+return;
+
+}
+
+
+if(result.applications.length===0){
+
+content.innerHTML=`
+
+<div class="empty">
+
+<h3>No applications yet</h3>
+
+<p>
+Workers who apply for this job will appear here.
+</p>
+
+</div>
+
+`;
+
+return;
+
+}
+
+
+content.innerHTML=
+result.applications.map(app=>`
+
+<div class="card">
+
+<div class="worker-top">
+
+<div class="worker-name">
+
+${escapeHtml(app.worker_name)}
+
+</div>
+
+<div class="status">
+
+${escapeHtml(app.status)}
+
+</div>
+
+</div>
+
+
+<div class="message">
+
+${escapeHtml(
+app.message ||
+"No application message."
+)}
+
+</div>
+
+
+<div class="phone">
+
+📱 ${escapeHtml(app.worker_phone || "Phone unavailable")}
+
+</div>
+
+
+<div class="actions">
+
+<button
+class="hire"
+onclick="hireWorker(${app.id})">
+
+Hire Worker
+
+</button>
+
+
+<button
+class="reject"
+onclick="rejectApplication(${app.id})">
+
+Reject
+
+</button>
+
+</div>
+
+</div>
+
+`).join("");
+
+
+}catch(error){
+
+console.error(error);
+
+content.innerHTML=`
+
+<div class="empty">
+
+<h3>Connection error</h3>
+
+<p>
+Could not connect to the server.
+</p>
+
+</div>
+
+`;
+
+}
+
+}
+
+
+function escapeHtml(value){
+
+return String(value)
+.replace(/&/g,"&amp;")
+.replace(/</g,"&lt;")
+.replace(/>/g,"&gt;")
+.replace(/"/g,"&quot;")
+.replace(/'/g,"&#039;");
+
+}
+
+
+function hireWorker(applicationId){
+
+alert(
+"Worker hiring will be connected next."
+);
+
+}
+
+
+function rejectApplication(applicationId){
+
+alert(
+"Application rejection will be connected next."
+);
+
+}
+
+</script>
+
+</body>
+</html>

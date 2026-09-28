@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Post Job - Quick Jobs Kenya</title>
+
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+
+body{
+font-family:Arial,Helvetica,sans-serif;
+background:#101820;
+min-height:100vh;
+padding:25px 18px;
+}
+
+.container{
+max-width:650px;
+margin:auto;
+}
+
+.brand{
+color:white;
+text-align:center;
+margin-bottom:20px;
+}
+
+.brand h1{font-size:23px}
+
+.brand span{color:#16a34a}
+
+.brand p{
+color:#aeb8bf;
+margin-top:6px;
+font-size:14px;
+}
+
+.card{
+background:white;
+border-radius:15px;
+padding:28px 22px;
+}
+
+.card h2{margin-bottom:7px}
+
+.subtitle{
+color:#68737d;
+font-size:14px;
+margin-bottom:24px;
+}
+
+label{
+display:block;
+font-weight:bold;
+font-size:13px;
+margin-bottom:7px;
+color:#34404a;
+}
+
+input,textarea,select{
+width:100%;
+border:1px solid #d8dedb;
+border-radius:8px;
+padding:13px;
+font-size:15px;
+margin-bottom:17px;
+outline:none;
+font-family:inherit;
+}
+
+textarea{
+min-height:130px;
+resize:vertical;
+}
+
+input:focus,textarea:focus,select:focus{
+border-color:#16a34a;
+}
+
+.post{
+width:100%;
+background:#16a34a;
+color:white;
+border:none;
+border-radius:8px;
+padding:14px;
+font-size:15px;
+font-weight:bold;
+cursor:pointer;
+}
+
+.message{
+display:none;
+padding:12px;
+border-radius:7px;
+margin-bottom:15px;
+font-size:14px;
+}
+
+.error{
+background:#fdecec;
+color:#a61b1b;
+}
+
+.success{
+background:#eaf8ef;
+color:#176b34;
+}
+
+.back{
+text-align:center;
+margin-top:17px;
+}
+
+.back a{
+color:#aeb8bf;
+text-decoration:none;
+font-size:13px;
+}
+</style>
+</head>
+
+<body>
+
+<div class="container">
+
+<div class="brand">
+
+<h1>
+QUICK <span>JOBS</span> KENYA
+</h1>
+
+<p>
+Post a job and find the right person.
+</p>
+
+</div>
+
+<div class="card">
+
+<h2>Post a Job</h2>
+
+<p class="subtitle">
+Tell workers what you need done and how much you are offering.
+</p>
+
+<div id="message" class="message"></div>
+
+<form id="jobForm">
+
+<label>Job Title</label>
+
+<input
+type="text"
+id="title"
+placeholder="e.g. Create a business poster"
+required
+>
+
+<label>Category</label>
+
+<select id="category">
+
+<option value="">Select a category</option>
+<option>Typing</option>
+<option>Graphic Design</option>
+<option>CV & Resume</option>
+<option>Writing</option>
+<option>Data Entry</option>
+<option>Social Media</option>
+<option>Photography</option>
+<option>Programming</option>
+<option>Other</option>
+
+</select>
+
+<label>Job Description</label>
+
+<textarea
+id="description"
+placeholder="Describe exactly what you need..."
+required
+></textarea>
+
+<label>Budget (KSh)</label>
+
+<input
+type="number"
+id="budget"
+placeholder="e.g. 500"
+min="1"
+step="1"
+required
+>
+
+<button class="post" type="submit">
+Post Job
+</button>
+
+</form>
+
+<div class="back">
+
+<a href="/client.html">
+← Back to Client Dashboard
+</a>
+
+</div>
+
+</div>
+
+</div>
+
+<script>
+
+const token=
+localStorage.getItem("qjk_token");
+
+if(!token){
+window.location.href="/login.html";
+}
+
+const form=
+document.getElementById("jobForm");
+
+const message=
+document.getElementById("message");
+
+function showMessage(text,type){
+
+message.textContent=text;
+message.className="message "+type;
+message.style.display="block";
+
+}
+
+form.addEventListener("submit",async function(event){
+
+event.preventDefault();
+
+const data={
+
+title:
+document.getElementById("title").value.trim(),
+
+category:
+document.getElementById("category").value,
+
+description:
+document.getElementById("description").value.trim(),
+
+budget:
+document.getElementById("budget").value
+
+};
+
+showMessage("Posting your job...","success");
+
+try{
+
+const response=await fetch("/api/jobs",{
+
+method:"POST",
+
+headers:{
+"Content-Type":"application/json",
+"Authorization":"Bearer "+token
+},
+
+body:JSON.stringify(data)
+
+});
+
+const result=await response.json();
+
+if(!result.success){
+
+showMessage(
+result.message || "Could not post job.",
+"error"
+);
+
+return;
+
+}
+
+showMessage(
+"Job posted successfully!",
+"success"
+);
+
+form.reset();
+
+setTimeout(function(){
+
+window.location.href="/client.html";
+
+},1200);
+
+}catch(error){
+
+console.error(error);
+
+showMessage(
+"Could not connect to the server.",
+"error"
+);
+
+}
+
+});
+
+</script>
+
+</body>
+</html>

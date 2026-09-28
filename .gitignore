@@ -1,0 +1,4 @@
+node_modules/
+quickjobs.db
+*.db
+.env

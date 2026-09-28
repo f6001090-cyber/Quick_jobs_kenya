@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>Earnings - Quick Jobs Kenya</title>
+
+    <style>
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            font-family: Arial, sans-serif;
+            background: #f3f4f6;
+            color: #111827;
+        }
+
+        header {
+            background: #111827;
+            color: white;
+            padding: 20px;
+            text-align: center;
+        }
+
+        header h1 {
+            margin: 0;
+        }
+
+        .container {
+            width: 92%;
+            max-width: 700px;
+            margin: 25px auto;
+        }
+
+        .balance {
+            background: white;
+            padding: 25px;
+            border-radius: 15px;
+            text-align: center;
+            box-shadow: 0 3px 12px rgba(0,0,0,0.08);
+            margin-bottom: 20px;
+        }
+
+        .balance p {
+            margin: 0 0 10px;
+            color: #6b7280;
+        }
+
+        .amount {
+            font-size: 32px;
+            font-weight: bold;
+        }
+
+        .transactions {
+            background: white;
+            padding: 20px;
+            border-radius: 15px;
+            box-shadow: 0 3px 12px rgba(0,0,0,0.08);
+        }
+
+        .transactions h2 {
+            margin-top: 0;
+        }
+
+        .transaction {
+            border-bottom: 1px solid #e5e7eb;
+            padding: 15px 0;
+        }
+
+        .transaction:last-child {
+            border-bottom: none;
+        }
+
+        .transaction-top {
+            display: flex;
+            justify-content: space-between;
+            gap: 10px;
+        }
+
+        .earning {
+            color: #15803d;
+            font-weight: bold;
+            margin-top: 8px;
+        }
+
+        .withdrawal {
+            color: #dc2626;
+            font-weight: bold;
+            margin-top: 8px;
+        }
+
+        .refund {
+            color: #2563eb;
+            font-weight: bold;
+            margin-top: 8px;
+        }
+
+        .date {
+            color: #6b7280;
+            font-size: 13px;
+            margin-top: 6px;
+        }
+
+        .status {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 20px;
+            font-size: 12px;
+            margin-top: 7px;
+            background: #e5e7eb;
+        }
+
+        .message {
+            text-align: center;
+            color: #6b7280;
+        }
+
+        .back {
+            display: block;
+            margin-top: 20px;
+            text-align: center;
+            text-decoration: none;
+            background: #111827;
+            color: white;
+            padding: 13px;
+            border-radius: 10px;
+        }
+
+        .back:hover {
+            opacity: 0.9;
+        }
+
+    </style>
+</head>
+
+<body>
+
+<header>
+    <h1>My Earnings</h1>
+</header>
+
+<div class="container">
+
+    <div class="balance">
+
+        <p>Available Balance</p>
+
+        <div class="amount" id="balance">
+            KSh 0
+        </div>
+
+    </div>
+
+    <div class="transactions">
+
+        <h2>Transaction History</h2>
+
+        <div id="transactions">
+            Loading...
+        </div>
+
+    </div>
+
+    <a class="back" href="/worker.html">
+        ← Back to Worker Dashboard
+    </a>
+
+</div>
+
+<script>
+
+const token = localStorage.getItem("qjk_token");
+
+if (!token) {
+    window.location.href = "/login.html";
+}
+
+async function loadWallet() {
+
+    try {
+
+        const response = await fetch("/api/wallet", {
+
+            headers: {
+                "Authorization": "Bearer " + token
+            }
+
+        });
+
+        const data = await response.json();
+
+        if (!response.ok || !data.success) {
+
+            throw new Error(
+                data.message ||
+                "Unable to load wallet."
+            );
+
+        }
+
+        document.getElementById("balance").textContent =
+            "KSh " +
+            Number(data.balance || 0).toLocaleString();
+
+        const transactions =
+            data.transactions || [];
+
+        if (transactions.length === 0) {
+
+            document.getElementById("transactions").innerHTML = `
+                <p class="message">
+                    No transactions yet.
+                </p>
+            `;
+
+            return;
+        }
+
+        document.getElementById("transactions").innerHTML =
+            transactions.map(transaction => {
+
+                const type =
+                    String(transaction.type || "")
+                    .toLowerCase();
+
+                const amount =
+                    Number(transaction.amount || 0);
+
+                let displayAmount =
+                    "+ KSh " +
+                    amount.toLocaleString();
+
+                let amountClass = "earning";
+
+                if (
+                    type.includes("withdraw") ||
+                    type.includes("debit")
+                ) {
+
+                    displayAmount =
+                        "- KSh " +
+                        amount.toLocaleString();
+
+                    amountClass = "withdrawal";
+
+                } else if (
+                    type.includes("refund")
+                ) {
+
+                    displayAmount =
+                        "+ KSh " +
+                        amount.toLocaleString();
+
+                    amountClass = "refund";
+
+                }
+
+                return `
+
+                    <div class="transaction">
+
+                        <div class="transaction-top">
+
+                            <strong>
+                                ${escapeHtml(
+                                    transaction.description ||
+                                    transaction.type ||
+                                    "Transaction"
+                                )}
+                            </strong>
+
+                        </div>
+
+                        <div class="${amountClass}">
+                            ${displayAmount}
+                        </div>
+
+                        <div class="status">
+                            ${escapeHtml(
+                                transaction.status ||
+                                "completed"
+                            )}
+                        </div>
+
+                        <div class="date">
+                            ${escapeHtml(
+                                transaction.created_at || ""
+                            )}
+                        </div>
+
+                    </div>
+
+                `;
+
+            }).join("");
+
+    } catch (error) {
+
+        document.getElementById("transactions").innerHTML = `
+
+            <p class="message">
+                ${escapeHtml(error.message)}
+            </p>
+
+        `;
+
+    }
+
+}
+
+function escapeHtml(text) {
+
+    const div =
+        document.createElement("div");
+
+    div.textContent =
+        String(text);
+
+    return div.innerHTML;
+}
+
+loadWallet();
+
+</script>
+
+</body>
+</html>

@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>Create Account - Quick Jobs Kenya</title>
+
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: Arial, Helvetica, sans-serif;
+            background: #101820;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 430px;
+        }
+
+        .brand {
+            text-align: center;
+            color: white;
+            margin-bottom: 20px;
+        }
+
+        .brand h1 {
+            font-size: 24px;
+        }
+
+        .brand span {
+            color: #16a34a;
+        }
+
+        .brand p {
+            color: #aeb8bf;
+            margin-top: 6px;
+            font-size: 14px;
+        }
+
+        .card {
+            background: white;
+            border-radius: 16px;
+            padding: 28px 22px;
+            box-shadow: 0 15px 40px rgba(0,0,0,0.25);
+        }
+
+        .card h2 {
+            margin-bottom: 7px;
+            color: #17202a;
+        }
+
+        .subtitle {
+            color: #68737d;
+            font-size: 14px;
+            margin-bottom: 24px;
+        }
+
+        label {
+            display: block;
+            font-size: 13px;
+            font-weight: bold;
+            margin-bottom: 7px;
+            color: #34404a;
+        }
+
+        input,
+        select {
+            width: 100%;
+            padding: 13px;
+            border: 1px solid #d8dedb;
+            border-radius: 8px;
+            font-size: 15px;
+            margin-bottom: 16px;
+            outline: none;
+        }
+
+        input:focus,
+        select:focus {
+            border-color: #16a34a;
+        }
+
+        .submit {
+            width: 100%;
+            padding: 14px;
+            background: #16a34a;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 15px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+        .submit:hover {
+            background: #12803a;
+        }
+
+        .message {
+            display: none;
+            margin-bottom: 15px;
+            padding: 12px;
+            border-radius: 7px;
+            font-size: 14px;
+        }
+
+        .error {
+            background: #fdecec;
+            color: #a61b1b;
+        }
+
+        .success {
+            background: #eaf8ef;
+            color: #176b34;
+        }
+
+        .login {
+            text-align: center;
+            margin-top: 20px;
+            font-size: 14px;
+            color: #68737d;
+        }
+
+        .login a {
+            color: #16a34a;
+            font-weight: bold;
+            text-decoration: none;
+        }
+
+        .back {
+            text-align: center;
+            margin-top: 18px;
+        }
+
+        .back a {
+            color: #aeb8bf;
+            text-decoration: none;
+            font-size: 13px;
+        }
+    </style>
+</head>
+
+<body>
+
+<div class="container">
+
+    <div class="brand">
+        <h1>QUICK <span>JOBS</span> KENYA</h1>
+        <p>Find work. Get paid.</p>
+    </div>
+
+    <div class="card">
+
+        <h2>Create your account</h2>
+
+        <p class="subtitle">
+            Join thousands of people looking for opportunities.
+        </p>
+
+        <div id="message" class="message"></div>
+
+        <form id="registerForm">
+
+            <label>Full Name</label>
+
+            <input
+                type="text"
+                id="full_name"
+                placeholder="Enter your full name"
+                required
+            >
+
+            <label>Phone Number</label>
+
+            <input
+                type="tel"
+                id="phone"
+                placeholder="e.g. 0712345678"
+                required
+            >
+
+            <label>Email (optional)</label>
+
+            <input
+                type="email"
+                id="email"
+                placeholder="you@example.com"
+            >
+
+            <label>Account Type</label>
+
+            <select id="role">
+
+                <option value="worker">
+                    Worker — I want to find jobs
+                </option>
+
+                <option value="client">
+                    Client — I want to post jobs
+                </option>
+
+            </select>
+
+            <label>Password</label>
+
+            <input
+                type="password"
+                id="password"
+                placeholder="At least 6 characters"
+                required
+            >
+
+            <button
+                type="submit"
+                class="submit">
+                Create Account
+            </button>
+
+        </form>
+
+        <div class="login">
+            Already have an account?
+            <a href="/login.html">Login</a>
+        </div>
+
+    </div>
+
+    <div class="back">
+        <a href="/">← Back to Quick Jobs Kenya</a>
+    </div>
+
+</div>
+
+
+<script>
+
+const form = document.getElementById("registerForm");
+const message = document.getElementById("message");
+
+function showMessage(text, type) {
+
+    message.textContent = text;
+
+    message.className =
+        "message " + type;
+
+    message.style.display = "block";
+}
+
+
+form.addEventListener("submit", async function(event) {
+
+    event.preventDefault();
+
+    showMessage("Creating your account...", "success");
+
+    const data = {
+
+        full_name:
+            document.getElementById("full_name").value.trim(),
+
+        phone:
+            document.getElementById("phone").value.trim(),
+
+        email:
+            document.getElementById("email").value.trim(),
+
+        role:
+            document.getElementById("role").value,
+
+        password:
+            document.getElementById("password").value
+
+    };
+
+
+    try {
+
+        const response = await fetch("/api/register", {
+
+            method: "POST",
+
+            headers: {
+                "Content-Type": "application/json"
+            },
+
+            body: JSON.stringify(data)
+
+        });
+
+
+        const result = await response.json();
+
+
+        if (!result.success) {
+
+            showMessage(
+                result.message || "Registration failed.",
+                "error"
+            );
+
+            return;
+        }
+
+
+        showMessage(
+            "Account created successfully! Redirecting to login...",
+            "success"
+        );
+
+
+        setTimeout(() => {
+
+            window.location.href = "/login.html";
+
+        }, 1500);
+
+
+    } catch (error) {
+
+        console.error(error);
+
+        showMessage(
+            "Unable to connect to the server.",
+            "error"
+        );
+
+    }
+
+});
+
+</script>
+
+</body>
+</html>

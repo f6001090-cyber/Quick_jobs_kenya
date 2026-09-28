@@ -1,0 +1,3038 @@
+const express = require("express");
+const cors = require("cors");
+const path = require("path");
+const fs = require("fs");
+const initSqlJs = require("sql.js");
+const bcrypt = require("bcryptjs");
+const jwt = require("jsonwebtoken");
+
+const app = express();
+
+const PORT = 3000;
+const JWT_SECRET = "QUICK_JOBS_KENYA_CHANGE_THIS_SECRET_LATER";
+const DB_PATH = path.join(__dirname, "quickjobs.db");
+
+let db;
+
+app.use(cors());
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
+// Website files
+app.use(express.static(path.join(__dirname, "public")));
+
+// Save database to disk
+function saveDatabase() {
+    const data = db.export();
+    fs.writeFileSync(DB_PATH, Buffer.from(data));
+}
+
+// Authentication middleware
+function authenticate(req, res, next) {
+    const header = req.headers.authorization;
+
+    if (!header || !header.startsWith("Bearer ")) {
+        return res.status(401).json({
+            success: false,
+            message: "Authentication required."
+        });
+    }
+
+    const token = header.split(" ")[1];
+
+    try {
+        const decoded = jwt.verify(token, JWT_SECRET);
+        req.user = decoded;
+        next();
+    } catch (error) {
+        return res.status(401).json({
+            success: false,
+            message: "Invalid or expired login session."
+        });
+    }
+}
+
+
+// ================================
+// SERVER STATUS
+// ================================
+
+app.get("/api/status", (req, res) => {
+    res.json({
+        success: true,
+        app: "Quick Jobs Kenya",
+        status: "online"
+    });
+});
+
+
+// ================================
+// REGISTER
+// ================================
+
+app.post("/api/register", async (req, res) => {
+
+    try {
+
+        const {
+            full_name,
+            phone,
+            email,
+            password,
+            role
+        } = req.body;
+
+        if (!full_name || !phone || !password) {
+            return res.status(400).json({
+                success: false,
+                message: "Full name, phone number and password are required."
+            });
+        }
+
+        if (password.length < 6) {
+            return res.status(400).json({
+                success: false,
+                message: "Password must contain at least 6 characters."
+            });
+        }
+
+        const accountRole =
+            role === "client" ? "client" : "worker";
+
+        // Check existing phone
+        const existingPhone = db.exec(
+            "SELECT id FROM users WHERE phone = ?",
+            [phone.trim()]
+        );
+
+        if (existingPhone.length > 0) {
+            return res.status(409).json({
+                success: false,
+                message: "That phone number is already registered."
+            });
+        }
+
+        // Check existing email
+        if (email && email.trim() !== "") {
+
+            const existingEmail = db.exec(
+                "SELECT id FROM users WHERE email = ?",
+                [email.trim().toLowerCase()]
+            );
+
+            if (existingEmail.length > 0) {
+                return res.status(409).json({
+                    success: false,
+                    message: "That email is already registered."
+                });
+            }
+        }
+
+        const hashedPassword = await bcrypt.hash(password, 10);
+
+        db.run(
+            `
+            INSERT INTO users
+            (full_name, phone, email, password, role)
+            VALUES (?, ?, ?, ?, ?)
+            `,
+            [
+                full_name.trim(),
+                phone.trim(),
+                email && email.trim() !== ""
+                    ? email.trim().toLowerCase()
+                    : null,
+                hashedPassword,
+                accountRole
+            ]
+        );
+
+        saveDatabase();
+
+        const result = db.exec(
+            `
+            SELECT
+                id,
+                full_name,
+                phone,
+                email,
+                role,
+                wallet_balance,
+                status,
+                created_at
+            FROM users
+            WHERE phone = ?
+            `,
+            [phone.trim()]
+        );
+
+        const user = {
+            id: result[0].values[0][0],
+            full_name: result[0].values[0][1],
+            phone: result[0].values[0][2],
+            email: result[0].values[0][3],
+            role: result[0].values[0][4],
+            wallet_balance: result[0].values[0][5],
+            status: result[0].values[0][6],
+            created_at: result[0].values[0][7]
+        };
+
+        res.status(201).json({
+            success: true,
+            message: "Account created successfully.",
+            user
+        });
+
+    } catch (error) {
+
+        console.error("REGISTER ERROR:", error);
+
+        res.status(500).json({
+            success: false,
+            message: "Registration failed."
+        });
+    }
+});
+
+
+// ================================
+// LOGIN
+// ================================
+
+app.post("/api/login", async (req, res) => {
+
+    try {
+
+        const { phone, password } = req.body;
+
+        if (!phone || !password) {
+            return res.status(400).json({
+                success: false,
+                message: "Phone number and password are required."
+            });
+        }
+
+        const result = db.exec(
+            `
+            SELECT
+                id,
+                full_name,
+                phone,
+                email,
+                password,
+                role,
+                wallet_balance,
+                status,
+                created_at
+            FROM users
+            WHERE phone = ?
+            `,
+            [phone.trim()]
+        );
+
+        if (
+            result.length === 0 ||
+            result[0].values.length === 0
+        ) {
+            return res.status(401).json({
+                success: false,
+                message: "Incorrect phone number or password."
+            });
+        }
+
+        const row = result[0].values[0];
+
+        const user = {
+            id: row[0],
+            full_name: row[1],
+            phone: row[2],
+            email: row[3],
+            password: row[4],
+            role: row[5],
+            wallet_balance: row[6],
+            status: row[7],
+            created_at: row[8]
+        };
+
+        if (user.status !== "active") {
+            return res.status(403).json({
+                success: false,
+                message: "Your account is not active."
+            });
+        }
+
+        const passwordCorrect =
+            await bcrypt.compare(password, user.password);
+
+        if (!passwordCorrect) {
+            return res.status(401).json({
+                success: false,
+                message: "Incorrect phone number or password."
+            });
+        }
+
+        const token = jwt.sign(
+            {
+                id: user.id,
+                role: user.role
+            },
+            JWT_SECRET,
+            {
+                expiresIn: "7d"
+            }
+        );
+
+        delete user.password;
+
+        res.json({
+            success: true,
+            message: "Login successful.",
+            token,
+            user
+        });
+
+    } catch (error) {
+
+        console.error("LOGIN ERROR:", error);
+
+        res.status(500).json({
+            success: false,
+            message: "Login failed."
+        });
+    }
+});
+
+
+// ================================
+// CURRENT USER
+// ================================
+
+app.get("/api/me", authenticate, (req, res) => {
+
+    try {
+
+        const result = db.exec(
+            `
+            SELECT
+                id,
+                full_name,
+                phone,
+                email,
+                role,
+                wallet_balance,
+                status,
+                created_at
+            FROM users
+            WHERE id = ?
+            `,
+            [req.user.id]
+        );
+
+        if (
+            result.length === 0 ||
+            result[0].values.length === 0
+        ) {
+            return res.status(404).json({
+                success: false,
+                message: "User not found."
+            });
+        }
+
+        const row = result[0].values[0];
+
+        res.json({
+            success: true,
+            user: {
+                id: row[0],
+                full_name: row[1],
+                phone: row[2],
+                email: row[3],
+                role: row[4],
+                wallet_balance: row[5],
+                status: row[6],
+                created_at: row[7]
+            }
+        });
+
+    } catch (error) {
+
+        console.error("ME ERROR:", error);
+
+        res.status(500).json({
+            success: false,
+            message: "Could not load account."
+        });
+    }
+});
+
+
+
+// ================================
+// WITHDRAWAL API
+// ================================
+
+app.post("/api/withdraw", authenticate, (req, res) => {
+
+    try {
+
+        if (req.user.role !== "worker") {
+            return res.status(403).json({
+                success: false,
+                message: "Only workers can withdraw money."
+            });
+        }
+
+        const amount = Number(req.body.amount);
+        const phone = String(req.body.phone || "").trim();
+
+        if (!Number.isFinite(amount) || amount <= 0) {
+            return res.status(400).json({
+                success: false,
+                message: "Enter a valid withdrawal amount."
+            });
+        }
+
+        if (!/^07\d{8}$/.test(phone)) {
+            return res.status(400).json({
+                success: false,
+                message: "Enter a valid Kenyan M-Pesa number."
+            });
+        }
+
+        const minimumWithdrawal = 200;
+
+        if (amount < minimumWithdrawal) {
+            return res.status(400).json({
+                success: false,
+                message: "Minimum withdrawal is KSh 200."
+            });
+        }
+
+        const userResult = db.exec(
+            `
+            SELECT wallet_balance
+            FROM users
+            WHERE id = ?
+            `,
+            [req.user.id]
+        );
+
+        if (
+            userResult.length === 0 ||
+            userResult[0].values.length === 0
+        ) {
+            return res.status(404).json({
+                success: false,
+                message: "User not found."
+            });
+        }
+
+        const balance = Number(userResult[0].values[0][0] || 0);
+
+        if (amount > balance) {
+            return res.status(400).json({
+                success: false,
+                message: "Insufficient wallet balance."
+            });
+        }
+
+        // Deduct the requested amount immediately so it cannot
+        // be withdrawn twice while the request is pending.
+        db.run(
+            `
+            UPDATE users
+            SET wallet_balance = wallet_balance - ?
+            WHERE id = ?
+            `,
+            [amount, req.user.id]
+        );
+
+        db.run(
+            `
+            INSERT INTO withdrawals
+            (user_id, amount, phone, status)
+            VALUES (?, ?, ?, 'pending')
+            `,
+            [req.user.id, amount, phone]
+        );
+
+        db.run(
+            `
+            INSERT INTO transactions
+            (user_id, type, amount, reference, description, status)
+            VALUES (?, 'withdrawal', ?, ?, ?, 'pending')
+            `,
+            [
+                req.user.id,
+                -amount,
+                "WD-" + Date.now(),
+                "Withdrawal request"
+            ]
+        );
+
+        // Save all withdrawal changes permanently
+        saveDatabase();
+
+        res.json({
+            success: true,
+            message: "Withdrawal request submitted successfully.",
+            amount,
+            phone,
+            status: "pending"
+        });
+
+    } catch (error) {
+
+        console.error("WITHDRAW ERROR:", error);
+
+        res.status(500).json({
+            success: false,
+            message: "Unable to process withdrawal."
+        });
+    }
+});
+
+
+// GET MY WITHDRAWALS
+app.get("/api/my-withdrawals", authenticate, (req, res) => {
+
+    try {
+
+        if (req.user.role !== "worker") {
+            return res.status(403).json({
+                success: false,
+                message: "Only workers can view withdrawals."
+            });
+        }
+
+        const result = db.exec(
+            `
+            SELECT
+                id,
+                amount,
+                phone,
+                status,
+                created_at,
+                processed_at
+            FROM withdrawals
+            WHERE user_id = ?
+            ORDER BY id DESC
+            `,
+            [req.user.id]
+        );
+
+        const withdrawals =
+            result.length > 0
+                ? result[0].values.map(row => ({
+                    id: row[0],
+                    amount: row[1],
+                    phone: row[2],
+                    status: row[3],
+                    created_at: row[4],
+                    processed_at: row[5]
+                }))
+                : [];
+
+        res.json({
+            success: true,
+            withdrawals
+        });
+
+    } catch (error) {
+
+        console.error("MY WITHDRAWALS ERROR:", error);
+
+        res.status(500).json({
+            success: false,
+            message: "Unable to load withdrawals."
+        });
+    }
+});
+
+// ================================
+// END WITHDRAWAL API
+
+// ================================
+// ADMIN WITHDRAWAL MANAGEMENT
+// ================================
+
+// VIEW ALL WITHDRAWALS
+app.get("/api/admin/withdrawals", authenticate, (req, res) => {
+
+    try {
+
+        if (req.user.role !== "admin") {
+            return res.status(403).json({
+                success: false,
+                message: "Admin access required."
+            });
+        }
+
+        const result = db.exec(`
+            SELECT
+                withdrawals.id,
+                withdrawals.user_id,
+                users.full_name,
+                users.phone AS user_phone,
+                withdrawals.amount,
+                withdrawals.phone AS mpesa_phone,
+                withdrawals.status,
+                withdrawals.created_at,
+                withdrawals.processed_at
+            FROM withdrawals
+            LEFT JOIN users
+                ON users.id = withdrawals.user_id
+            ORDER BY withdrawals.id DESC
+        `);
+
+        const withdrawals =
+            result.length > 0
+                ? result[0].values.map(row => ({
+                    id: row[0],
+                    user_id: row[1],
+                    full_name: row[2],
+                    user_phone: row[3],
+                    amount: row[4],
+                    mpesa_phone: row[5],
+                    status: row[6],
+                    created_at: row[7],
+                    processed_at: row[8]
+                }))
+                : [];
+
+        res.json({
+            success: true,
+            withdrawals
+        });
+
+    } catch (error) {
+
+        console.error("ADMIN WITHDRAWALS ERROR:", error);
+
+        res.status(500).json({
+            success: false,
+            message: "Unable to load withdrawals."
+        });
+    }
+});
+
+
+// APPROVE WITHDRAWAL
+app.post("/api/admin/withdrawals/:id/approve", authenticate, (req, res) => {
+
+    try {
+
+        if (req.user.role !== "admin") {
+            return res.status(403).json({
+                success: false,
+                message: "Admin access required."
+            });
+        }
+
+        const withdrawalId = Number(req.params.id);
+
+        if (!Number.isInteger(withdrawalId)) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid withdrawal ID."
+            });
+        }
+
+        const result = db.exec(
+            `
+            SELECT
+                id,
+                user_id,
+                amount,
+                phone,
+                status
+            FROM withdrawals
+            WHERE id = ?
+            `,
+            [withdrawalId]
+        );
+
+        if (
+            result.length === 0 ||
+            result[0].values.length === 0
+        ) {
+            return res.status(404).json({
+                success: false,
+                message: "Withdrawal not found."
+            });
+        }
+
+        const row = result[0].values[0];
+
+        const userId = row[1];
+        const amount = Number(row[2]);
+        const status = row[4];
+
+        if (status !== "pending") {
+            return res.status(400).json({
+                success: false,
+                message: "This withdrawal has already been processed."
+            });
+        }
+
+        db.run(
+            `
+            UPDATE withdrawals
+            SET status = 'completed',
+                processed_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+            `,
+            [withdrawalId]
+        );
+
+        db.run(
+            `
+            UPDATE transactions
+            SET status = 'completed'
+            WHERE user_id = ?
+              AND type = 'withdrawal'
+              AND amount = ?
+              AND status = 'pending'
+              AND description = 'Withdrawal request'
+            `,
+            [userId, -amount]
+        );
+
+        saveDatabase();
+
+        res.json({
+            success: true,
+            message: "Withdrawal approved successfully."
+        });
+
+    } catch (error) {
+
+        console.error("APPROVE WITHDRAWAL ERROR:", error);
+
+        res.status(500).json({
+            success: false,
+            message: "Unable to approve withdrawal."
+        });
+    }
+});
+
+
+// REJECT WITHDRAWAL
+app.post("/api/admin/withdrawals/:id/reject", authenticate, (req, res) => {
+
+    try {
+
+        if (req.user.role !== "admin") {
+            return res.status(403).json({
+                success: false,
+                message: "Admin access required."
+            });
+        }
+
+        const withdrawalId = Number(req.params.id);
+
+        if (!Number.isInteger(withdrawalId)) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid withdrawal ID."
+            });
+        }
+
+        const result = db.exec(
+            `
+            SELECT
+                id,
+                user_id,
+                amount,
+                status
+            FROM withdrawals
+            WHERE id = ?
+            `,
+            [withdrawalId]
+        );
+
+        if (
+            result.length === 0 ||
+            result[0].values.length === 0
+        ) {
+            return res.status(404).json({
+                success: false,
+                message: "Withdrawal not found."
+            });
+        }
+
+        const row = result[0].values[0];
+
+        const userId = row[1];
+        const amount = Number(row[2]);
+        const status = row[3];
+
+        if (status !== "pending") {
+            return res.status(400).json({
+                success: false,
+                message: "This withdrawal has already been processed."
+            });
+        }
+
+        // Return the money to the worker
+        db.run(
+            `
+            UPDATE users
+            SET wallet_balance = wallet_balance + ?
+            WHERE id = ?
+            `,
+            [amount, userId]
+        );
+
+        db.run(
+            `
+            UPDATE withdrawals
+            SET status = 'rejected',
+                processed_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+            `,
+            [withdrawalId]
+        );
+
+        db.run(
+            `
+            UPDATE transactions
+            SET status = 'rejected'
+            WHERE user_id = ?
+              AND type = 'withdrawal'
+              AND amount = ?
+              AND status = 'pending'
+              AND description = 'Withdrawal request'
+            `,
+            [userId, -amount]
+        );
+
+        db.run(
+            `
+            INSERT INTO transactions
+            (user_id, type, amount, reference, description, status)
+            VALUES (?, 'refund', ?, ?, ?, 'completed')
+            `,
+            [
+                userId,
+                amount,
+                "REFUND-WD-" + withdrawalId,
+                "Rejected withdrawal refund"
+            ]
+        );
+
+        saveDatabase();
+
+        res.json({
+            success: true,
+            message: "Withdrawal rejected and money refunded."
+        });
+
+    } catch (error) {
+
+        console.error("REJECT WITHDRAWAL ERROR:", error);
+
+        res.status(500).json({
+            success: false,
+            message: "Unable to reject withdrawal."
+        });
+    }
+});
+
+// ================================
+// END ADMIN WITHDRAWAL MANAGEMENT
+
+// ================================
+// ADMIN USER MANAGEMENT
+// ================================
+
+// VIEW ALL USERS
+app.get("/api/admin/users", authenticate, (req, res) => {
+
+    try {
+
+        if (req.user.role !== "admin") {
+            return res.status(403).json({
+                success: false,
+                message: "Admin access required."
+            });
+        }
+
+        const result = db.exec(`
+            SELECT
+                id,
+                full_name,
+                phone,
+                email,
+                role,
+                wallet_balance,
+                status,
+                created_at
+            FROM users
+            ORDER BY id DESC
+        `);
+
+        const users =
+            result.length > 0
+                ? result[0].values.map(row => ({
+                    id: row[0],
+                    full_name: row[1],
+                    phone: row[2],
+                    email: row[3],
+                    role: row[4],
+                    wallet_balance: row[5],
+                    status: row[6],
+                    created_at: row[7]
+                }))
+                : [];
+
+        res.json({
+            success: true,
+            users
+        });
+
+    } catch (error) {
+
+        console.error("ADMIN USERS ERROR:", error);
+
+        res.status(500).json({
+            success: false,
+            message: "Unable to load users."
+        });
+    }
+});
+
+
+// SUSPEND USER
+app.post("/api/admin/users/:id/suspend", authenticate, (req, res) => {
+
+    try {
+
+        if (req.user.role !== "admin") {
+            return res.status(403).json({
+                success: false,
+                message: "Admin access required."
+            });
+        }
+
+        const userId = Number(req.params.id);
+
+        if (!Number.isInteger(userId)) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid user ID."
+            });
+        }
+
+        if (userId === Number(req.user.id)) {
+            return res.status(400).json({
+                success: false,
+                message: "You cannot suspend your own account."
+            });
+        }
+
+        const result = db.exec(
+            `
+            SELECT id, role
+            FROM users
+            WHERE id = ?
+            `,
+            [userId]
+        );
+
+        if (
+            result.length === 0 ||
+            result[0].values.length === 0
+        ) {
+            return res.status(404).json({
+                success: false,
+                message: "User not found."
+            });
+        }
+
+        db.run(
+            `
+            UPDATE users
+            SET status = 'suspended'
+            WHERE id = ?
+            `,
+            [userId]
+        );
+
+        saveDatabase();
+
+        res.json({
+            success: true,
+            message: "User suspended successfully."
+        });
+
+    } catch (error) {
+
+        console.error("SUSPEND USER ERROR:", error);
+
+        res.status(500).json({
+            success: false,
+            message: "Unable to suspend user."
+        });
+    }
+});
+
+
+// ACTIVATE USER
+app.post("/api/admin/users/:id/activate", authenticate, (req, res) => {
+
+    try {
+
+        if (req.user.role !== "admin") {
+            return res.status(403).json({
+                success: false,
+                message: "Admin access required."
+            });
+        }
+
+        const userId = Number(req.params.id);
+
+        if (!Number.isInteger(userId)) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid user ID."
+            });
+        }
+
+        db.run(
+            `
+            UPDATE users
+            SET status = 'active'
+            WHERE id = ?
+            `,
+            [userId]
+        );
+
+        saveDatabase();
+
+        res.json({
+            success: true,
+            message: "User activated successfully."
+        });
+
+    } catch (error) {
+
+        console.error("ACTIVATE USER ERROR:", error);
+
+        res.status(500).json({
+            success: false,
+            message: "Unable to activate user."
+        });
+    }
+});
+
+
+// DELETE USER
+app.delete("/api/admin/users/:id", authenticate, (req, res) => {
+
+    try {
+
+        if (req.user.role !== "admin") {
+            return res.status(403).json({
+                success: false,
+                message: "Admin access required."
+            });
+        }
+
+        const userId = Number(req.params.id);
+
+        if (!Number.isInteger(userId)) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid user ID."
+            });
+        }
+
+        if (userId === Number(req.user.id)) {
+            return res.status(400).json({
+                success: false,
+                message: "You cannot delete your own account."
+            });
+        }
+
+        const result = db.exec(
+            `
+            SELECT id
+            FROM users
+            WHERE id = ?
+            `,
+            [userId]
+        );
+
+        if (
+            result.length === 0 ||
+            result[0].values.length === 0
+        ) {
+            return res.status(404).json({
+                success: false,
+                message: "User not found."
+            });
+        }
+
+        db.run(
+            "DELETE FROM applications WHERE worker_id = ?",
+            [userId]
+        );
+
+        db.run(
+            "DELETE FROM transactions WHERE user_id = ?",
+            [userId]
+        );
+
+        db.run(
+            "DELETE FROM withdrawals WHERE user_id = ?",
+            [userId]
+        );
+
+        db.run(
+            "DELETE FROM jobs WHERE client_id = ?",
+            [userId]
+        );
+
+        db.run(
+            "DELETE FROM users WHERE id = ?",
+            [userId]
+        );
+
+        saveDatabase();
+
+        res.json({
+            success: true,
+            message: "User deleted successfully."
+        });
+
+    } catch (error) {
+
+        console.error("DELETE USER ERROR:", error);
+
+        res.status(500).json({
+            success: false,
+            message: "Unable to delete user."
+        });
+    }
+});
+
+// ================================
+// END ADMIN USER MANAGEMENT
+
+// ================================
+// ADMIN JOB MANAGEMENT
+// ================================
+
+// VIEW ALL JOBS
+app.get("/api/admin/jobs", authenticate, (req, res) => {
+
+    try {
+
+        if (req.user.role !== "admin") {
+            return res.status(403).json({
+                success: false,
+                message: "Admin access required."
+            });
+        }
+
+        const result = db.exec(`
+            SELECT
+                jobs.id,
+                jobs.title,
+                jobs.description,
+                jobs.category,
+                jobs.budget,
+                jobs.status,
+                jobs.client_id,
+                client.full_name,
+                jobs.hired_worker_id,
+                worker.full_name,
+                jobs.created_at
+            FROM jobs
+            LEFT JOIN users AS client
+                ON client.id = jobs.client_id
+            LEFT JOIN users AS worker
+                ON worker.id = jobs.hired_worker_id
+            ORDER BY jobs.id DESC
+        `);
+
+        const jobs =
+            result.length > 0
+                ? result[0].values.map(row => ({
+                    id: row[0],
+                    title: row[1],
+                    description: row[2],
+                    category: row[3],
+                    budget: row[4],
+                    status: row[5],
+                    client_id: row[6],
+                    client_name: row[7],
+                    hired_worker_id: row[8],
+                    worker_name: row[9],
+                    created_at: row[10]
+                }))
+                : [];
+
+        res.json({
+            success: true,
+            jobs
+        });
+
+    } catch (error) {
+
+        console.error("ADMIN JOBS ERROR:", error);
+
+        res.status(500).json({
+            success: false,
+            message: "Unable to load jobs."
+        });
+    }
+});
+
+
+// DELETE JOB
+app.delete("/api/admin/jobs/:id", authenticate, (req, res) => {
+
+    try {
+
+        if (req.user.role !== "admin") {
+            return res.status(403).json({
+                success: false,
+                message: "Admin access required."
+            });
+        }
+
+        const jobId = Number(req.params.id);
+
+        if (!Number.isInteger(jobId)) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid job ID."
+            });
+        }
+
+        const result = db.exec(
+            `
+            SELECT id
+            FROM jobs
+            WHERE id = ?
+            `,
+            [jobId]
+        );
+
+        if (
+            result.length === 0 ||
+            result[0].values.length === 0
+        ) {
+            return res.status(404).json({
+                success: false,
+                message: "Job not found."
+            });
+        }
+
+        db.run(
+            "DELETE FROM applications WHERE job_id = ?",
+            [jobId]
+        );
+
+        db.run(
+            "DELETE FROM jobs WHERE id = ?",
+            [jobId]
+        );
+
+        saveDatabase();
+
+        res.json({
+            success: true,
+            message: "Job deleted successfully."
+        });
+
+    } catch (error) {
+
+        console.error("DELETE JOB ERROR:", error);
+
+        res.status(500).json({
+            success: false,
+            message: "Unable to delete job."
+        });
+    }
+});
+
+// ================================
+// END ADMIN JOB MANAGEMENT
+
+// ================================
+// ADMIN STATISTICS & REPORTS
+// ================================
+
+app.get("/api/admin/stats", authenticate, (req, res) => {
+
+    try {
+
+        if (req.user.role !== "admin") {
+            return res.status(403).json({
+                success: false,
+                message: "Admin access required."
+            });
+        }
+
+        const usersResult = db.exec(`
+            SELECT
+                COUNT(*) AS total,
+                SUM(CASE WHEN role = 'worker' THEN 1 ELSE 0 END),
+                SUM(CASE WHEN role = 'client' THEN 1 ELSE 0 END),
+                SUM(CASE WHEN role = 'admin' THEN 1 ELSE 0 END),
+                SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END),
+                SUM(CASE WHEN status = 'suspended' THEN 1 ELSE 0 END)
+            FROM users
+        `);
+
+        const jobsResult = db.exec(`
+            SELECT
+                COUNT(*) AS total,
+                SUM(CASE WHEN status = 'open' THEN 1 ELSE 0 END),
+                SUM(CASE WHEN status = 'assigned' THEN 1 ELSE 0 END),
+                SUM(CASE WHEN status = 'hired' THEN 1 ELSE 0 END),
+                SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END)
+            FROM jobs
+        `);
+
+        const walletResult = db.exec(`
+            SELECT
+                COALESCE(SUM(wallet_balance), 0)
+            FROM users
+        `);
+
+        const withdrawalResult = db.exec(`
+            SELECT
+                COUNT(*),
+                COALESCE(
+                    SUM(
+                        CASE
+                            WHEN status = 'pending'
+                            THEN amount
+                            ELSE 0
+                        END
+                    ),
+                    0
+                ),
+                COALESCE(
+                    SUM(
+                        CASE
+                            WHEN status = 'completed'
+                            THEN amount
+                            ELSE 0
+                        END
+                    ),
+                    0
+                ),
+                SUM(
+                    CASE
+                        WHEN status = 'pending'
+                        THEN 1
+                        ELSE 0
+                    END
+                ),
+                SUM(
+                    CASE
+                        WHEN status = 'completed'
+                        THEN 1
+                        ELSE 0
+                    END
+                ),
+                SUM(
+                    CASE
+                        WHEN status = 'rejected'
+                        THEN 1
+                        ELSE 0
+                    END
+                )
+            FROM withdrawals
+        `);
+
+        const users =
+            usersResult.length > 0
+                ? usersResult[0].values[0]
+                : [0, 0, 0, 0, 0, 0];
+
+        const jobs =
+            jobsResult.length > 0
+                ? jobsResult[0].values[0]
+                : [0, 0, 0, 0, 0];
+
+        const wallet =
+            walletResult.length > 0
+                ? walletResult[0].values[0][0]
+                : 0;
+
+        const withdrawals =
+            withdrawalResult.length > 0
+                ? withdrawalResult[0].values[0]
+                : [0, 0, 0, 0, 0, 0];
+
+        res.json({
+            success: true,
+
+            users: {
+                total: Number(users[0] || 0),
+                workers: Number(users[1] || 0),
+                clients: Number(users[2] || 0),
+                admins: Number(users[3] || 0),
+                active: Number(users[4] || 0),
+                suspended: Number(users[5] || 0)
+            },
+
+            jobs: {
+                total: Number(jobs[0] || 0),
+                open: Number(jobs[1] || 0),
+                assigned: Number(jobs[2] || 0),
+                hired: Number(jobs[3] || 0),
+                completed: Number(jobs[4] || 0)
+            },
+
+            wallet: {
+                total_balance: Number(wallet || 0)
+            },
+
+            withdrawals: {
+                total: Number(withdrawals[0] || 0),
+                pending_amount: Number(withdrawals[1] || 0),
+                completed_amount: Number(withdrawals[2] || 0),
+                pending_count: Number(withdrawals[3] || 0),
+                completed_count: Number(withdrawals[4] || 0),
+                rejected_count: Number(withdrawals[5] || 0)
+            }
+        });
+
+    } catch (error) {
+
+        console.error("ADMIN STATS ERROR:", error);
+
+        res.status(500).json({
+            success: false,
+            message: "Unable to load statistics."
+        });
+    }
+});
+
+// ================================
+// END ADMIN STATISTICS & REPORTS
+
+// ================================
+// ADMIN FINANCIAL REPORTS
+// ================================
+
+app.get("/api/admin/reports", authenticate, (req, res) => {
+
+    try {
+
+        if (req.user.role !== "admin") {
+            return res.status(403).json({
+                success: false,
+                message: "Admin access required."
+            });
+        }
+
+        const result = db.exec(`
+            SELECT
+                transactions.id,
+                transactions.user_id,
+                users.full_name,
+                users.phone,
+                transactions.type,
+                transactions.amount,
+                transactions.reference,
+                transactions.description,
+                transactions.status,
+                transactions.created_at
+            FROM transactions
+            LEFT JOIN users
+                ON users.id = transactions.user_id
+            ORDER BY transactions.id DESC
+        `);
+
+        const transactions =
+            result.length > 0
+                ? result[0].values.map(row => ({
+                    id: row[0],
+                    user_id: row[1],
+                    full_name: row[2],
+                    phone: row[3],
+                    type: row[4],
+                    amount: row[5],
+                    reference: row[6],
+                    description: row[7],
+                    status: row[8],
+                    created_at: row[9]
+                }))
+                : [];
+
+        let totalCredits = 0;
+        let totalWithdrawals = 0;
+        let completedWithdrawals = 0;
+        let pendingWithdrawals = 0;
+
+        transactions.forEach(transaction => {
+
+            const amount =
+                Number(transaction.amount || 0);
+
+            if (amount > 0) {
+                totalCredits += amount;
+            }
+
+            if (
+                transaction.type === "withdrawal"
+            ) {
+
+                totalWithdrawals +=
+                    Math.abs(amount);
+
+                if (
+                    transaction.status ===
+                    "completed"
+                ) {
+                    completedWithdrawals +=
+                        Math.abs(amount);
+                }
+
+                if (
+                    transaction.status ===
+                    "pending"
+                ) {
+                    pendingWithdrawals +=
+                        Math.abs(amount);
+                }
+            }
+        });
+
+        res.json({
+            success: true,
+
+            summary: {
+                transaction_count:
+                    transactions.length,
+
+                total_credits:
+                    totalCredits,
+
+                total_withdrawals:
+                    totalWithdrawals,
+
+                completed_withdrawals:
+                    completedWithdrawals,
+
+                pending_withdrawals:
+                    pendingWithdrawals
+            },
+
+            transactions
+        });
+
+    } catch (error) {
+
+        console.error("ADMIN REPORTS ERROR:", error);
+
+        res.status(500).json({
+            success: false,
+            message: "Unable to load financial reports."
+        });
+    }
+});
+
+// ================================
+// END ADMIN FINANCIAL REPORTS
+// ================================
+
+// ================================
+
+// ================================
+
+// ================================
+
+// ================================
+
+// ================================
+
+// ================================
+// WALLET
+// ================================
+
+app.get("/api/wallet", authenticate, (req, res) => {
+
+    try {
+
+        const userResult = db.exec(
+            `
+            SELECT wallet_balance
+            FROM users
+            WHERE id = ?
+            `,
+            [req.user.id]
+        );
+
+        if (
+            userResult.length === 0 ||
+            userResult[0].values.length === 0
+        ) {
+            return res.status(404).json({
+                success: false,
+                message: "User not found."
+            });
+        }
+
+        const transactions = db.exec(
+            `
+            SELECT
+                id,
+                type,
+                amount,
+                reference,
+                description,
+                status,
+                created_at
+            FROM transactions
+            WHERE user_id = ?
+            ORDER BY id DESC
+            `,
+            [req.user.id]
+        );
+
+        let transactionList = [];
+
+        if (transactions.length > 0) {
+
+            transactionList = transactions[0].values.map(row => ({
+                id: row[0],
+                type: row[1],
+                amount: row[2],
+                reference: row[3],
+                description: row[4],
+                status: row[5],
+                created_at: row[6]
+            }));
+
+        }
+
+        res.json({
+            success: true,
+            balance: userResult[0].values[0][0],
+            transactions: transactionList
+        });
+
+    } catch (error) {
+
+        console.error("WALLET ERROR:", error);
+
+        res.status(500).json({
+            success: false,
+            message: "Could not load wallet."
+        });
+    }
+});
+
+
+
+
+// ================================
+// QJK JOB API START
+// ================================
+
+// CREATE JOB
+app.post("/api/jobs", authenticate, (req, res) => {
+
+    try {
+
+        if (req.user.role !== "client") {
+            return res.status(403).json({
+                success: false,
+                message: "Only client accounts can post jobs."
+            });
+        }
+
+        const {
+            title,
+            description,
+            category,
+            budget
+        } = req.body;
+
+        if (!title || !description || !budget) {
+            return res.status(400).json({
+                success: false,
+                message: "Title, description and budget are required."
+            });
+        }
+
+        const amount = Number(budget);
+
+        if (!Number.isFinite(amount) || amount <= 0) {
+            return res.status(400).json({
+                success: false,
+                message: "Enter a valid job budget."
+            });
+        }
+
+        db.run(
+            `
+            INSERT INTO jobs
+            (
+                client_id,
+                title,
+                description,
+                category,
+                budget
+            )
+            VALUES (?, ?, ?, ?, ?)
+            `,
+            [
+                req.user.id,
+                title.trim(),
+                description.trim(),
+                category ? category.trim() : null,
+                amount
+            ]
+        );
+
+        saveDatabase();
+
+        const result = db.exec(
+            `
+            SELECT
+                id,
+                client_id,
+                title,
+                description,
+                category,
+                budget,
+                status,
+                created_at
+            FROM jobs
+            WHERE client_id = ?
+            ORDER BY id DESC
+            LIMIT 1
+            `,
+            [req.user.id]
+        );
+
+        const row = result[0].values[0];
+
+        res.status(201).json({
+            success: true,
+            message: "Job posted successfully.",
+            job: {
+                id: row[0],
+                client_id: row[1],
+                title: row[2],
+                description: row[3],
+                category: row[4],
+                budget: row[5],
+                status: row[6],
+                created_at: row[7]
+            }
+        });
+
+    } catch (error) {
+
+        console.error("CREATE JOB ERROR:", error);
+
+        res.status(500).json({
+            success: false,
+            message: "Could not create job."
+        });
+    }
+});
+
+
+// GET OPEN JOBS
+app.get("/api/jobs", authenticate, (req, res) => {
+
+    try {
+
+        const result = db.exec(
+            `
+            SELECT
+                jobs.id,
+                jobs.title,
+                jobs.description,
+                jobs.category,
+                jobs.budget,
+                jobs.status,
+                jobs.created_at,
+                users.full_name AS client_name
+            FROM jobs
+            JOIN users
+                ON users.id = jobs.client_id
+            WHERE jobs.status = 'open'
+            ORDER BY jobs.id DESC
+            `
+        );
+
+        let jobs = [];
+
+        if (result.length > 0) {
+
+            jobs = result[0].values.map(row => ({
+                id: row[0],
+                title: row[1],
+                description: row[2],
+                category: row[3],
+                budget: row[4],
+                status: row[5],
+                created_at: row[6],
+                client_name: row[7]
+            }));
+
+        }
+
+        res.json({
+            success: true,
+            jobs
+        });
+
+    } catch (error) {
+
+        console.error("GET JOBS ERROR:", error);
+
+        res.status(500).json({
+            success: false,
+            message: "Could not load jobs."
+        });
+    }
+});
+
+
+// GET ONE JOB
+app.get("/api/jobs/:id", authenticate, (req, res) => {
+
+    try {
+
+        const jobId = Number(req.params.id);
+
+        if (!Number.isInteger(jobId)) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid job ID."
+            });
+        }
+
+        const result = db.exec(
+            `
+            SELECT
+                jobs.id,
+                jobs.client_id,
+                jobs.title,
+                jobs.description,
+                jobs.category,
+                jobs.budget,
+                jobs.status,
+                jobs.hired_worker_id,
+                jobs.created_at,
+                users.full_name AS client_name
+            FROM jobs
+            JOIN users
+                ON users.id = jobs.client_id
+            WHERE jobs.id = ?
+            `,
+            [jobId]
+        );
+
+        if (
+            result.length === 0 ||
+            result[0].values.length === 0
+        ) {
+            return res.status(404).json({
+                success: false,
+                message: "Job not found."
+            });
+        }
+
+        const row = result[0].values[0];
+
+        res.json({
+            success: true,
+            job: {
+                id: row[0],
+                client_id: row[1],
+                title: row[2],
+                description: row[3],
+                category: row[4],
+                budget: row[5],
+                status: row[6],
+                hired_worker_id: row[7],
+                created_at: row[8],
+                client_name: row[9]
+            }
+        });
+
+    } catch (error) {
+
+        console.error("GET JOB ERROR:", error);
+
+        res.status(500).json({
+            success: false,
+            message: "Could not load job."
+        });
+    }
+});
+
+
+// CLIENT'S JOBS
+app.get("/api/client/my-jobs", authenticate, (req, res) => {
+
+    try {
+
+        const result = db.exec(
+            `
+            SELECT
+                id,
+                title,
+                description,
+                category,
+                budget,
+                status,
+                hired_worker_id,
+                created_at
+            FROM jobs
+            WHERE client_id = ?
+            ORDER BY id DESC
+            `,
+            [req.user.id]
+        );
+
+        let jobs = [];
+
+        if (result.length > 0) {
+
+            jobs = result[0].values.map(row => ({
+                id: row[0],
+                title: row[1],
+                description: row[2],
+                category: row[3],
+                budget: row[4],
+                status: row[5],
+                hired_worker_id: row[6],
+                created_at: row[7]
+            }));
+
+        }
+
+        res.json({
+            success: true,
+            jobs
+        });
+
+    } catch (error) {
+
+        console.error("MY JOBS ERROR:", error);
+
+        res.status(500).json({
+            success: false,
+            message: "Could not load your jobs."
+        });
+    }
+});
+
+
+// ================================
+// QJK JOB API END
+// ================================
+
+
+
+// ================================
+// QJK APPLICATION API START
+// ================================
+
+app.post("/api/applications", authenticate, (req, res) => {
+
+    try {
+
+        if (req.user.role !== "worker") {
+            return res.status(403).json({
+                success: false,
+                message: "Only worker accounts can apply for jobs."
+            });
+        }
+
+        const jobId = Number(req.body.job_id);
+        const message = (req.body.message || "").trim();
+
+        if (!Number.isInteger(jobId)) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid job ID."
+            });
+        }
+
+        const jobResult = db.exec(
+            `
+            SELECT id, client_id, title, budget, status
+            FROM jobs
+            WHERE id = ?
+            `,
+            [jobId]
+        );
+
+        if (
+            jobResult.length === 0 ||
+            jobResult[0].values.length === 0
+        ) {
+            return res.status(404).json({
+                success: false,
+                message: "Job not found."
+            });
+        }
+
+        const job = jobResult[0].values[0];
+
+        if (job[4] !== "open") {
+            return res.status(400).json({
+                success: false,
+                message: "This job is no longer accepting applications."
+            });
+        }
+
+        const existing = db.exec(
+            `
+            SELECT id
+            FROM applications
+            WHERE job_id = ?
+            AND worker_id = ?
+            `,
+            [jobId, req.user.id]
+        );
+
+        if (
+            existing.length > 0 &&
+            existing[0].values.length > 0
+        ) {
+            return res.status(409).json({
+                success: false,
+                message: "You have already applied for this job."
+            });
+        }
+
+        db.run(
+            `
+            INSERT INTO applications
+            (
+                job_id,
+                worker_id,
+                message,
+                status
+            )
+            VALUES (?, ?, ?, 'pending')
+            `,
+            [
+                jobId,
+                req.user.id,
+                message
+            ]
+        );
+
+        saveDatabase();
+
+        res.status(201).json({
+            success: true,
+            message: "Application submitted successfully."
+        });
+
+    } catch (error) {
+
+        console.error("APPLICATION ERROR:", error);
+
+        res.status(500).json({
+            success: false,
+            message: "Could not submit application."
+        });
+
+    }
+
+});
+
+
+// WORKER APPLICATIONS
+
+app.get("/api/my-applications", authenticate, (req, res) => {
+
+    try {
+
+        if (req.user.role !== "worker") {
+            return res.status(403).json({
+                success: false,
+                message: "Only workers can view applications."
+            });
+        }
+
+        const result = db.exec(
+            `
+            SELECT
+                applications.id,
+                applications.job_id,
+                applications.message,
+                applications.status,
+                applications.created_at,
+                jobs.title,
+                jobs.budget
+            FROM applications
+            JOIN jobs
+                ON jobs.id = applications.job_id
+            WHERE applications.worker_id = ?
+            ORDER BY applications.id DESC
+            `,
+            [req.user.id]
+        );
+
+        let applications = [];
+
+        if (result.length > 0) {
+
+            applications = result[0].values.map(row => ({
+                id: row[0],
+                job_id: row[1],
+                message: row[2],
+                status: row[3],
+                created_at: row[4],
+                job_title: row[5],
+                budget: row[6]
+            }));
+
+        }
+
+        res.json({
+            success: true,
+            applications
+        });
+
+    } catch (error) {
+
+        console.error("MY APPLICATIONS ERROR:", error);
+
+        res.status(500).json({
+            success: false,
+            message: "Could not load applications."
+        });
+
+    }
+
+});
+
+
+// CLIENT VIEW APPLICATIONS
+
+app.get("/api/job-applications/:jobId", authenticate, (req, res) => {
+
+    try {
+
+        if (req.user.role !== "client") {
+            return res.status(403).json({
+                success: false,
+                message: "Only clients can view applicants."
+            });
+        }
+
+        const jobId = Number(req.params.jobId);
+
+        const jobResult = db.exec(
+            `
+            SELECT client_id
+            FROM jobs
+            WHERE id = ?
+            `,
+            [jobId]
+        );
+
+        if (
+            jobResult.length === 0 ||
+            jobResult[0].values.length === 0
+        ) {
+            return res.status(404).json({
+                success: false,
+                message: "Job not found."
+            });
+        }
+
+        if (jobResult[0].values[0][0] !== req.user.id) {
+            return res.status(403).json({
+                success: false,
+                message: "You do not own this job."
+            });
+        }
+
+        const result = db.exec(
+            `
+            SELECT
+                applications.id,
+                applications.worker_id,
+                applications.message,
+                applications.status,
+                applications.created_at,
+                users.full_name,
+                users.phone
+            FROM applications
+            JOIN users
+                ON users.id = applications.worker_id
+            WHERE applications.job_id = ?
+            ORDER BY applications.id DESC
+            `,
+            [jobId]
+        );
+
+        let applications = [];
+
+        if (result.length > 0) {
+
+            applications = result[0].values.map(row => ({
+                id: row[0],
+                worker_id: row[1],
+                message: row[2],
+                status: row[3],
+                created_at: row[4],
+                worker_name: row[5],
+                worker_phone: row[6]
+            }));
+
+        }
+
+        res.json({
+            success: true,
+            applications
+        });
+
+    } catch (error) {
+
+        console.error("JOB APPLICATIONS ERROR:", error);
+
+        res.status(500).json({
+            success: false,
+            message: "Could not load applicants."
+        });
+
+    }
+
+});
+
+
+// ================================
+// QJK APPLICATION API END
+// ================================
+
+
+
+// ================================
+// QJK HIRING API START
+// ================================
+
+// CLIENT HIRES A WORKER
+app.post("/api/hire", authenticate, (req, res) => {
+
+    try {
+
+        if (req.user.role !== "client") {
+            return res.status(403).json({
+                success: false,
+                message: "Only clients can hire workers."
+            });
+        }
+
+        const applicationId =
+            Number(req.body.application_id);
+
+        if (!Number.isInteger(applicationId)) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid application ID."
+            });
+        }
+
+        const applicationResult = db.exec(
+            `
+            SELECT
+                applications.id,
+                applications.job_id,
+                applications.worker_id,
+                applications.status,
+                jobs.client_id,
+                jobs.status,
+                jobs.hired_worker_id
+            FROM applications
+            JOIN jobs
+                ON jobs.id = applications.job_id
+            WHERE applications.id = ?
+            `,
+            [applicationId]
+        );
+
+        if (
+            applicationResult.length === 0 ||
+            applicationResult[0].values.length === 0
+        ) {
+            return res.status(404).json({
+                success: false,
+                message: "Application not found."
+            });
+        }
+
+        const row =
+            applicationResult[0].values[0];
+
+        const jobId = row[1];
+        const workerId = row[2];
+        const applicationStatus = row[3];
+        const clientId = row[4];
+        const jobStatus = row[5];
+        const hiredWorkerId = row[6];
+
+        if (clientId !== req.user.id) {
+            return res.status(403).json({
+                success: false,
+                message: "You do not own this job."
+            });
+        }
+
+        if (jobStatus !== "open") {
+            return res.status(400).json({
+                success: false,
+                message: "This job has already been assigned."
+            });
+        }
+
+        if (hiredWorkerId !== null) {
+            return res.status(400).json({
+                success: false,
+                message: "A worker has already been hired."
+            });
+        }
+
+        if (applicationStatus !== "pending") {
+            return res.status(400).json({
+                success: false,
+                message: "This application is no longer pending."
+            });
+        }
+
+        // Assign worker to the job
+        db.run(
+            `
+            UPDATE jobs
+            SET
+                status = 'assigned',
+                hired_worker_id = ?
+            WHERE id = ?
+            `,
+            [workerId, jobId]
+        );
+
+        // Mark selected application as hired
+        db.run(
+            `
+            UPDATE applications
+            SET status = 'hired'
+            WHERE id = ?
+            `,
+            [applicationId]
+        );
+
+        // Reject all other pending applications
+        db.run(
+            `
+            UPDATE applications
+            SET status = 'rejected'
+            WHERE job_id = ?
+            AND id != ?
+            AND status = 'pending'
+            `,
+            [jobId, applicationId]
+        );
+
+        saveDatabase();
+
+        res.json({
+            success: true,
+            message: "Worker hired successfully.",
+            job_id: jobId,
+            worker_id: workerId
+        });
+
+    } catch (error) {
+
+        console.error("HIRING ERROR:", error);
+
+        res.status(500).json({
+            success: false,
+            message: "Could not hire worker."
+        });
+
+    }
+
+});
+
+
+// ================================
+// QJK HIRING API END
+// ================================
+
+// ================================
+
+
+// ================================
+// QJK COMPLETION API START
+// ================================
+
+// WORKER MARKS JOB COMPLETED
+app.post("/api/jobs/:jobId/complete", authenticate, (req, res) => {
+
+    try {
+
+        if (req.user.role !== "worker") {
+            return res.status(403).json({
+                success: false,
+                message: "Only workers can complete jobs."
+            });
+        }
+
+        const jobId = Number(req.params.jobId);
+
+        if (!Number.isInteger(jobId)) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid job ID."
+            });
+        }
+
+        const result = db.exec(
+            `
+            SELECT
+                id,
+                title,
+                budget,
+                status,
+                hired_worker_id
+            FROM jobs
+            WHERE id = ?
+            `,
+            [jobId]
+        );
+
+        if (
+            result.length === 0 ||
+            result[0].values.length === 0
+        ) {
+            return res.status(404).json({
+                success: false,
+                message: "Job not found."
+            });
+        }
+
+        const job = result[0].values[0];
+
+        const title = job[1];
+        const status = job[3];
+        const hiredWorkerId = job[4];
+
+        if (Number(hiredWorkerId) !== Number(req.user.id)) {
+            return res.status(403).json({
+                success: false,
+                message: "You are not assigned to this job."
+            });
+        }
+
+        if (status !== "assigned") {
+            return res.status(400).json({
+                success: false,
+                message: "This job is not currently assigned."
+            });
+        }
+
+        db.run(
+            `
+            UPDATE jobs
+            SET status = 'completed'
+            WHERE id = ?
+            AND hired_worker_id = ?
+            AND status = 'assigned'
+            `,
+            [jobId, req.user.id]
+        );
+
+        saveDatabase();
+
+        res.json({
+            success: true,
+            message: "Job marked as completed. Waiting for client confirmation.",
+            job_id: jobId,
+            title
+        });
+
+    } catch (error) {
+
+        console.error("COMPLETE JOB ERROR:", error);
+
+        res.status(500).json({
+            success: false,
+            message: "Could not complete job."
+        });
+
+    }
+
+});
+
+
+// CLIENT CONFIRMS AND PAYS WORKER
+app.post("/api/jobs/:jobId/confirm", authenticate, (req, res) => {
+
+    try {
+
+        if (req.user.role !== "client") {
+            return res.status(403).json({
+                success: false,
+                message: "Only clients can confirm jobs."
+            });
+        }
+
+        const jobId = Number(req.params.jobId);
+
+        if (!Number.isInteger(jobId)) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid job ID."
+            });
+        }
+
+        const result = db.exec(
+            `
+            SELECT
+                id,
+                client_id,
+                title,
+                budget,
+                status,
+                hired_worker_id
+            FROM jobs
+            WHERE id = ?
+            `,
+            [jobId]
+        );
+
+        if (
+            result.length === 0 ||
+            result[0].values.length === 0
+        ) {
+            return res.status(404).json({
+                success: false,
+                message: "Job not found."
+            });
+        }
+
+        const job = result[0].values[0];
+
+        const clientId = job[1];
+        const title = job[2];
+        const budget = Number(job[3]);
+        const status = job[4];
+        const workerId = job[5];
+
+        if (clientId !== req.user.id) {
+            return res.status(403).json({
+                success: false,
+                message: "You do not own this job."
+            });
+        }
+
+        if (status !== "completed") {
+            return res.status(400).json({
+                success: false,
+                message: "Worker has not completed this job."
+            });
+        }
+
+        if (!workerId) {
+            return res.status(400).json({
+                success: false,
+                message: "No worker is assigned."
+            });
+        }
+
+        if (!Number.isFinite(budget) || budget <= 0) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid job budget."
+            });
+        }
+
+        const reference =
+            "JOB-" + jobId;
+
+        // Prevent double payment
+        const existing = db.exec(
+            `
+            SELECT id
+            FROM transactions
+            WHERE reference = ?
+            `,
+            [reference]
+        );
+
+        if (
+            existing.length > 0 &&
+            existing[0].values.length > 0
+        ) {
+            return res.status(409).json({
+                success: false,
+                message: "This job has already been paid."
+            });
+        }
+
+        // 10% platform fee
+        const platformFee =
+            Math.round(budget * 0.10 * 100) / 100;
+
+        const workerEarnings =
+            Math.round(
+                (budget - platformFee) * 100
+            ) / 100;
+
+        // Add money to worker wallet
+        db.run(
+            `
+            UPDATE users
+            SET wallet_balance =
+                wallet_balance + ?
+            WHERE id = ?
+            `,
+            [workerEarnings, workerId]
+        );
+
+        // Record transaction
+        db.run(
+            `
+            INSERT INTO transactions
+            (
+                user_id,
+                type,
+                amount,
+                reference,
+                description,
+                status
+            )
+            VALUES (?, 'job_earning', ?, ?, ?, 'completed')
+            `,
+            [
+                workerId,
+                workerEarnings,
+                reference,
+                "Earnings for completed job: " + title
+            ]
+        );
+
+        // Mark job as paid
+        db.run(
+            `
+            UPDATE jobs
+            SET status = 'paid'
+            WHERE id = ?
+            AND status = 'completed'
+            `,
+            [jobId]
+        );
+
+        saveDatabase();
+
+        res.json({
+            success: true,
+            message: "Worker paid successfully.",
+            gross_amount: budget,
+            platform_fee: platformFee,
+            worker_earnings: workerEarnings
+        });
+
+    } catch (error) {
+
+        console.error("CONFIRM PAYMENT ERROR:", error);
+
+        res.status(500).json({
+            success: false,
+            message: "Could not confirm payment."
+        });
+
+    }
+
+});
+
+
+// ================================
+// QJK COMPLETION API END
+// ================================
+
+
+
+
+// ================================
+// QJK CLIENT JOBS API START
+// ================================
+
+app.get("/api/client-jobs", authenticate, (req, res) => {
+    try {
+        if (req.user.role !== "client") {
+            return res.status(403).json({
+                success: false,
+                message: "Client access required."
+            });
+        }
+
+        const result = db.exec(`
+            SELECT
+                id,
+                client_id,
+                title,
+                description,
+                category,
+                budget,
+                status,
+                hired_worker_id,
+                created_at
+            FROM jobs
+            WHERE client_id = ?
+            ORDER BY id DESC
+        `, [req.user.id]);
+
+        const jobs = result.length > 0
+            ? result[0].values.map(row => ({
+                id: row[0],
+                client_id: row[1],
+                title: row[2],
+                description: row[3],
+                category: row[4],
+                budget: row[5],
+                status: row[6],
+                hired_worker_id: row[7],
+                created_at: row[8]
+            }))
+            : [];
+
+        res.json({
+            success: true,
+            jobs
+        });
+
+    } catch (error) {
+        console.error("CLIENT JOBS ERROR:", error);
+
+        res.status(500).json({
+            success: false,
+            message: "Unable to load client jobs."
+        });
+    }
+});
+
+// ================================
+// QJK CLIENT JOBS API END
+// ================================
+
+
+// QJK MY JOBS API START
+// ================================
+
+app.get("/api/my-jobs", authenticate, (req, res) => {
+    try {
+
+        const workerId = Number(req.user.id);
+
+        console.log(
+            "MY JOBS REQUEST:",
+            "userId =", req.user.id,
+            "role =", req.user.role
+        );
+
+        if (req.user.role !== "worker") {
+            return res.status(403).json({
+                success: false,
+                message: "Only workers can view assigned jobs."
+            });
+        }
+
+        const result = db.exec(`
+            SELECT
+                id,
+                client_id,
+                title,
+                description,
+                category,
+                budget,
+                status,
+                hired_worker_id,
+                created_at
+            FROM jobs
+            WHERE hired_worker_id = ${workerId}
+            ORDER BY id DESC
+        `);
+
+        const jobs = result.length > 0
+            ? result[0].values.map(row => ({
+                id: row[0],
+                client_id: row[1],
+                title: row[2],
+                description: row[3],
+                category: row[4],
+                budget: row[5],
+                status: row[6],
+                hired_worker_id: row[7],
+                created_at: row[8]
+            }))
+            : [];
+
+        console.log(
+            "MY JOBS:",
+            "worker", workerId,
+            "found", jobs.length
+        );
+
+        res.json({
+            success: true,
+            jobs: jobs
+        });
+
+    } catch (error) {
+
+        console.error("MY JOBS ERROR:", error);
+
+        res.status(500).json({
+            success: false,
+            message: "Failed to load your jobs."
+        });
+    }
+});
+
+// ================================
+// QJK MY JOBS API END
+// ================================
+
+
+// QJK CLIENT COMPLETED JOBS API START
+
+app.get("/api/client-completed-jobs", authenticate, (req, res) => {
+
+    try {
+
+        if (req.user.role !== "client") {
+            return res.status(403).json({
+                success: false,
+                message: "Only clients can view completed jobs."
+            });
+        }
+
+        const clientId = Number(req.user.id);
+
+        const result = db.exec(
+            `
+            SELECT
+                id,
+                title,
+                description,
+                category,
+                budget,
+                status,
+                hired_worker_id,
+                created_at
+            FROM jobs
+            WHERE client_id = ?
+            AND status IN ('completed', 'paid')
+            ORDER BY id DESC
+            `,
+            [clientId]
+        );
+
+        const jobs = result.length > 0
+            ? result[0].values.map(row => ({
+                id: row[0],
+                title: row[1],
+                description: row[2],
+                category: row[3],
+                budget: row[4],
+                status: row[5],
+                hired_worker_id: row[6],
+                created_at: row[7]
+            }))
+            : [];
+
+        res.json({
+            success: true,
+            jobs
+        });
+
+    } catch (error) {
+
+        console.error(
+            "CLIENT COMPLETED JOBS ERROR:",
+            error
+        );
+
+        res.status(500).json({
+            success: false,
+            message: "Failed to load completed jobs."
+        });
+
+    }
+
+});
+
+// QJK CLIENT COMPLETED JOBS API END
+
+
+// TEMPORARY LIVE DATABASE DEBUG
+app.get("/api/debug-live-jobs", (req, res) => {
+    try {
+        const result = db.exec(`
+            SELECT id, title, status, hired_worker_id
+            FROM jobs
+            ORDER BY id DESC
+        `);
+
+        const jobs = result.length > 0 ? result[0].values : [];
+
+        res.json({
+            success: true,
+            jobs
+        });
+    } catch (error) {
+        console.error("LIVE DB DEBUG ERROR:", error);
+        res.status(500).json({
+            success: false,
+            message: error.message
+        });
+    }
+});
+
+
+
+// ================================
+// CLIENT MY JOBS API
+// ================================
+
+app.get("/api/client/my-jobs", authenticate, (req, res) => {
+
+    try {
+
+        if (req.user.role !== "client") {
+            return res.status(403).json({
+                success: false,
+                message: "Only clients can view their jobs."
+            });
+        }
+
+        const result = db.exec(
+            `
+            SELECT
+                id,
+                title,
+                description,
+                category,
+                budget,
+                status,
+                hired_worker_id,
+                created_at
+            FROM jobs
+            WHERE client_id = ?
+            ORDER BY id DESC
+            `,
+            [req.user.id]
+        );
+
+        const jobs =
+            result.length > 0
+                ? result[0].values.map(row => ({
+                    id: row[0],
+                    title: row[1],
+                    description: row[2],
+                    category: row[3],
+                    budget: row[4],
+                    status: row[5],
+                    hired_worker_id: row[6],
+                    created_at: row[7]
+                }))
+                : [];
+
+        res.json({
+            success: true,
+            jobs
+        });
+
+    } catch (error) {
+
+        console.error(
+            "CLIENT MY JOBS ERROR:",
+            error
+        );
+
+        res.status(500).json({
+            success: false,
+            message: "Unable to load your jobs."
+        });
+    }
+});
+
+// ================================
+// END CLIENT MY JOBS API
+// ================================
+
+// START SERVER
+// ================================
+
+async function startServer() {
+
+    try {
+
+        const SQL = await initSqlJs({
+            locateFile: file =>
+                path.join(
+                    __dirname,
+                    "node_modules/sql.js/dist",
+                    file
+                )
+        });
+
+        if (fs.existsSync(DB_PATH)) {
+
+            const file = fs.readFileSync(DB_PATH);
+
+            db = new SQL.Database(file);
+
+        } else {
+
+            db = new SQL.Database();
+
+            console.log(
+                "Database file not found. Run database.js first."
+            );
+        }
+
+        app.listen(PORT, "0.0.0.0", () => {
+
+            console.log("");
+            console.log("=================================");
+            console.log("       QUICK JOBS KENYA");
+            console.log("=================================");
+            console.log(
+                `Server running on http://localhost:${PORT}`
+            );
+            console.log("Database connected.");
+            console.log("Authentication system ready.");
+            console.log("=================================");
+            console.log("");
+
+        });
+
+    } catch (error) {
+
+        console.error("");
+        console.error("SERVER START ERROR:");
+        console.error(error);
+        console.error("");
+
+        process.exit(1);
+    }
+}
+
+startServer();
